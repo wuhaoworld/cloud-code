@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAppStore } from "@/store/app-store";
 import { ChatInput } from "@/components/chat/chat-input";
 import { CreateProjectDialog } from "@/components/project/create-project-dialog";
-import { Folder, ChevronDown, Check, Plus } from "lucide-react";
+import { Folder, FolderOpen, ChevronDown, Check, Plus } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -65,12 +65,15 @@ export default function ChatPage() {
             projectSelector={
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="flex items-center gap-1.5 text-[13px] text-muted-foreground hover:text-foreground outline-none transition-colors px-3 py-1 -ml-3 hover:bg-[#EAEAEA] dark:hover:bg-white/[0.08] rounded-full">
-                    <Folder className="size-3.5 shrink-0" />
+                  <button className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[12.5px] dark:text-white/55 text-black/45 dark:hover:bg-white/[0.06] hover:bg-black/[0.05] dark:hover:text-white/75 hover:text-black/65 transition-all outline-none">
+                    <FolderOpen size={13} className="opacity-65 shrink-0" />
                     <span className="max-w-[150px] truncate">
                       {selectedProject ? selectedProject.name : "选择项目"}
                     </span>
-                    <ChevronDown className="size-3 opacity-60" />
+                    <ChevronDown
+                      size={11}
+                      className="opacity-50 transition-transform [[data-state=open]_&]:rotate-180"
+                    />
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start" className="w-56 p-1">

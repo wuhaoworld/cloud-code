@@ -733,7 +733,7 @@ export function ChatInput({
                 }
                 onClick={handleAddAttachment}
                 disabled={disabled || attachments.length >= MAX_ATTACHMENTS}
-                className="flex items-center justify-center w-7 h-7 rounded-full dark:text-white/45 text-black/40 dark:hover:bg-white/[0.06] hover:bg-[#EAEAEA] dark:hover:text-white/70 hover:text-black/65 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex items-center justify-center w-7 h-7 rounded-lg dark:text-white/45 text-black/40 dark:hover:bg-white/[0.06] hover:bg-black/[0.05] dark:hover:text-white/70 hover:text-black/65 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <Plus size={14} />
               </button>
@@ -745,7 +745,7 @@ export function ChatInput({
                 <DropdownMenuTrigger asChild>
                   <button
                     disabled={disabled}
-                    className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[12.5px] dark:text-white/55 text-black/45 dark:hover:bg-white/[0.06] hover:bg-black/[0.05] dark:hover:text-white/75 hover:text-black/65 transition-colors outline-none"
+                    className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[12.5px] dark:text-white/55 text-black/45 dark:hover:bg-white/[0.06] hover:bg-black/[0.05] dark:hover:text-white/75 hover:text-black/65 transition-all outline-none"
                   >
                     <span>{model}</span>
                     <ChevronDown className="size-3 opacity-60" />
@@ -793,7 +793,7 @@ export function ChatInput({
 
         {/* Project Selector — inside the outer gray wrapper, below the main input box */}
         {projectSelector && (
-          <div className="flex items-center pl-3.5 pr-2 py-2.5">
+          <div className="flex items-center px-1.5 py-1.5">
             {projectSelector}
           </div>
         )}
