@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { Streamdown } from "streamdown";
 import { ToolCallCard } from "@/components/chat/tool-call-card";
@@ -20,17 +20,26 @@ export function MessageBubble({ message }: MessageBubbleProps) {
     setThinkingExpanded(message.isStreaming ?? false);
   }
 
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!message.isStreaming) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [message.isStreaming]);
+
+  const thinkingDuration = (() => {
+    if (!message.thinkingStartedAt) return null;
+    const endTime = message.isStreaming ? now : (message.timestamp || now);
+    return Math.max(1, Math.round((endTime - message.thinkingStartedAt) / 1000));
+  })();
+
   if (message.type === "thinking") {
     const hasContent = message.content && message.content.trim() !== "";
-    const thinkingDuration = useMemo(() => {
-      if (!message.thinkingStartedAt) return null;
-      const endTime = message.isStreaming ? Date.now() : (message.timestamp || Date.now());
-      return Math.max(1, Math.round((endTime - message.thinkingStartedAt) / 1000));
-    }, [message.thinkingStartedAt, message.isStreaming, message.timestamp]);
 
     const label = hasContent && !message.isStreaming
-      ? `已思考 ${thinkingDuration ?? 0} 秒`
-      : "思考中...";
+      ? `已思考 ${thinkingDuration ?? 1} 秒`
+      : "思考中";
 
     return (
       <div className="flex mb-4">
