@@ -157,7 +157,10 @@ export function ChatInput({
   // ── Refresh project files ──
   const refreshProjectFiles = useCallback(
     (filter = "") => {
-      if (!projectId) return;
+      if (!projectId) {
+        setProjectFiles([]);
+        return;
+      }
       fetch(
         `/api/projects/${projectId}/files${filter ? `?q=${encodeURIComponent(filter)}` : ""}`,
       )
@@ -172,12 +175,9 @@ export function ChatInput({
 
   // ── Pre-load files when projectId changes ──
   useEffect(() => {
-    if (!projectId) {
-      setProjectFiles([]);
-      return;
-    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- legitimate state reset on dependency change
     refreshProjectFiles();
-  }, [projectId, refreshProjectFiles]);
+  }, [refreshProjectFiles]);
 
   // ── Click outside to close panels ──
   useEffect(() => {
