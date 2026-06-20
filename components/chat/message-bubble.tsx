@@ -50,12 +50,12 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   if (message.type === "thinking") {
     const hasContent = message.content && message.content.trim() !== "";
 
-    // 无思考内容时，仅显示"思考中"动画
+    // 无思考内容时，仅显示"正在思考"动画
     if (!hasContent) {
       return (
         <div className="flex mb-4">
           <div className="flex-1">
-            <span className="text-xs thinking-highlight font-medium">思考中</span>
+            <span className="text-xs thinking-highlight font-medium">正在思考</span>
           </div>
         </div>
       );
@@ -64,7 +64,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
     const label =
       !message.isStreaming
         ? `已思考 ${thinkingDuration ?? 1} 秒`
-        : "思考中";
+        : `思考中... ${thinkingDuration ?? 1} S`;
 
     return (
       <div className="flex mb-4">
