@@ -16,7 +16,7 @@ export default async function ChatLayout({
   return (
     <div className="flex h-screen overflow-hidden bg-background">
       {/* 左侧侧边栏 */}
-      <div className="w-[240px] shrink-0 flex flex-col h-full">
+      <div className="w-76 shrink-0 flex flex-col h-full">
         <AppSidebar />
       </div>
 
