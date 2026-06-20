@@ -2,16 +2,7 @@
 
 import { useState, useRef, useCallback } from "react";
 import { cn } from "@/lib/utils";
-import {
-  Send,
-  Square,
-  Paperclip,
-  Mic,
-  Zap,
-  Code2,
-  Bug,
-  TestTube,
-} from "lucide-react";
+import { Send, Square, Paperclip, Mic } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useAppStore } from "@/store/app-store";
@@ -22,13 +13,6 @@ interface ChatInputProps {
   disabled?: boolean;
   placeholder?: string;
 }
-
-const QUICK_COMMANDS = [
-  { icon: Code2, label: "解释代码", prompt: "请解释当前项目的主要代码架构和实现逻辑" },
-  { icon: Bug, label: "分析错误", prompt: "帮我分析并修复当前项目中的错误" },
-  { icon: TestTube, label: "运行测试", prompt: "运行项目测试套件并分析测试结果" },
-  { icon: Zap, label: "优化性能", prompt: "分析并优化项目性能瓶颈" },
-];
 
 export function ChatInput({
   onSend,
@@ -66,33 +50,8 @@ export function ChatInput({
     ta.style.height = Math.min(ta.scrollHeight, 200) + "px";
   };
 
-  const handleQuickCommand = (prompt: string) => {
-    setValue(prompt);
-    textareaRef.current?.focus();
-  };
-
   return (
     <div className="flex flex-col gap-2">
-      {/* 快捷指令 */}
-      <div className="flex items-center gap-1.5 flex-wrap">
-        {QUICK_COMMANDS.map((cmd) => (
-          <button
-            key={cmd.label}
-            onClick={() => handleQuickCommand(cmd.prompt)}
-            className={cn(
-              "flex items-center gap-1.5 px-2.5 py-1 rounded-full",
-              "text-xs text-muted-foreground border border-border/60",
-              "hover:bg-accent hover:text-foreground transition-colors",
-              "bg-background"
-            )}
-            disabled={isStreaming}
-          >
-            <cmd.icon className="size-3" />
-            {cmd.label}
-          </button>
-        ))}
-      </div>
-
       {/* 输入区域 */}
       <div
         className={cn(
