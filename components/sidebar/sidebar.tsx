@@ -47,7 +47,7 @@ export function AppSidebar() {
           onClick={handleNewChat}
           className={cn(
             "w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md",
-            "text-sm text-foreground hover:bg-accent/60 transition-colors"
+            "text-sm text-foreground hover:bg-[#EBEBED] transition-colors"
           )}
           id="sidebar-new-chat-btn"
         >
@@ -57,7 +57,7 @@ export function AppSidebar() {
         <button
           className={cn(
             "w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md",
-            "text-sm text-foreground hover:bg-accent/60 transition-colors"
+            "text-sm text-foreground hover:bg-[#EBEBED] transition-colors"
           )}
         >
           <Search className="size-4 text-muted-foreground" />
@@ -92,7 +92,7 @@ export function AppSidebar() {
           href="/settings"
           className={cn(
             "flex items-center gap-2.5 px-2.5 py-2 rounded-md cursor-default",
-            "text-sm text-foreground hover:bg-[#E8EBEB] transition-colors"
+            "text-sm text-foreground hover:bg-[#EBEBED] transition-colors"
           )}
         >
           <Settings className="size-4 text-muted-foreground" />

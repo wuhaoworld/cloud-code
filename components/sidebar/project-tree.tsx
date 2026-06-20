@@ -184,8 +184,8 @@ export function ProjectTree({ onNewSession }: ProjectTreeProps) {
             <div
               className={cn(
                 "group flex items-center gap-1 px-3 py-1.5 rounded-md",
-                "hover:bg-[#E8EBEB] transition-colors",
-                isActive && !currentSessionId && "bg-[#E8EBEB]"
+                "hover:bg-[#EBEBED] transition-colors",
+                isActive && !currentSessionId && "bg-[#EBEBED]"
               )}
               onClick={() => handleToggleProject(project)}
             >
@@ -281,8 +281,8 @@ export function ProjectTree({ onNewSession }: ProjectTreeProps) {
                         onClick={() => handleSelectSession(project, sess)}
                         className={cn(
                           "w-full flex items-center gap-1.5 py-1.5 pr-3 pl-8 rounded-md text-left cursor-default",
-                          "hover:bg-[#E8EBEB] transition-colors",
-                          isSessionActive && "bg-[#E8EBEB]"
+                          "hover:bg-[#EBEBED] transition-colors",
+                          isSessionActive && "bg-[#EBEBED]"
                         )}
                       >
                         <span className="text-sm truncate flex-1 min-w-0">
