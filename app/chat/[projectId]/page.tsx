@@ -5,7 +5,6 @@ import { useAppStore } from "@/store/app-store";
 import { MessageBubble } from "@/components/chat/message-bubble";
 import { ChatInput } from "@/components/chat/chat-input";
 import { PermissionDialog } from "@/components/chat/permission-dialog";
-import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { v4 as uuidv4 } from "uuid";
 import { Loader2 } from "lucide-react";
@@ -35,7 +34,6 @@ export function ChatArea({
     isStreaming,
     pendingPermission,
     addMessage,
-    updateLastMessage,
     setMessages,
     setIsStreaming,
     setPendingPermission,
@@ -74,6 +72,7 @@ export function ChatArea({
       return;
     }
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsLoadingHistory(true);
     fetch(`/api/projects/${projectId}/sessions/${sessionId}/messages`)
       .then((res) => {
@@ -131,17 +130,19 @@ export function ChatArea({
       addMessage(userMsg);
       setIsStreaming(true);
 
-      // 添加 AI 消息占位符（流式中实时更新）
-      const aiTextMsgId = uuidv4();
-      const aiMsg: ChatMessage = {
-        id: aiTextMsgId,
+      // 添加 AI 消息占位符（初始为思考中占位）
+      const activeThinkingTempId = uuidv4();
+      const thinkingStart = Date.now();
+      const initialAiMsg: ChatMessage = {
+        id: activeThinkingTempId,
         role: "assistant",
-        type: "text",
+        type: "thinking",
         content: "",
         isStreaming: true,
-        timestamp: Date.now(),
+        timestamp: thinkingStart,
+        thinkingStartedAt: thinkingStart,
       };
-      addMessage(aiMsg);
+      addMessage(initialAiMsg);
 
       const controller = new AbortController();
       abortRef.current = controller;
@@ -166,9 +167,8 @@ export function ChatArea({
         const decoder = new TextDecoder();
         let buffer = "";
         let currentText = "";
-        // 当前 AI 文本消息在 messages 数组中是最后一个，直接更新它
-        let activeAiMsgId = aiTextMsgId;
-        let aiMsgInitialized = false;
+        let activeThinkingMsgId = activeThinkingTempId;
+        let activeTextMsgId: string | null = null;
 
         while (true) {
           const { done, value } = await reader.read();
@@ -188,33 +188,157 @@ export function ChatArea({
                   setCurrentSession(event.sessionId);
                   break;
 
-                case "text_start":
-                  // 服务端通知 AI 文本消息的真实 ID
-                  activeAiMsgId = event.msgId;
-                  aiMsgInitialized = true;
-                  break;
+                case "text_start": {
+                  const msgIdForTextStart: string = (event.msgId || uuidv4()) as string;
+                  activeTextMsgId = msgIdForTextStart;
+                  currentText = "";
 
-                case "text":
-                  currentText += event.content;
-                  updateLastMessage(currentText, true);
+                  const currentMsgs = [...useAppStore.getState().messages];
+                  const thinkingIdx = currentMsgs.findIndex((m) => m.id === activeThinkingMsgId);
+                  if (thinkingIdx !== -1) {
+                    const thinkingMsg = currentMsgs[thinkingIdx];
+                    if (thinkingMsg.content && thinkingMsg.content.trim() !== "") {
+                      // 思考过：标为结束（自动折叠），并追加新文本消息
+                      currentMsgs[thinkingIdx] = {
+                        ...thinkingMsg,
+                        isStreaming: false,
+                      };
+                      currentMsgs.push({
+                        id: msgIdForTextStart,
+                        role: "assistant",
+                        type: "text",
+                        content: "",
+                        isStreaming: true,
+                        timestamp: Date.now(),
+                      });
+                    } else {
+                      // 思考为空：直接将占位符转为文本类型
+                      currentMsgs[thinkingIdx] = {
+                        ...thinkingMsg,
+                        id: msgIdForTextStart,
+                        type: "text",
+                        content: "",
+                        isStreaming: true,
+                      };
+                    }
+                  } else {
+                    const lastIdx = currentMsgs.length - 1;
+                    if (lastIdx >= 0 && currentMsgs[lastIdx].isStreaming) {
+                      currentMsgs[lastIdx] = {
+                        ...currentMsgs[lastIdx],
+                        isStreaming: false,
+                      };
+                    }
+                    currentMsgs.push({
+                      id: msgIdForTextStart,
+                      role: "assistant",
+                      type: "text",
+                      content: "",
+                      isStreaming: true,
+                      timestamp: Date.now(),
+                    });
+                  }
+                  setMessages(currentMsgs);
                   break;
+                }
+
+                case "text": {
+                  const msgIdForText: string = (event.msgId || activeTextMsgId || uuidv4()) as string;
+                  currentText += event.content;
+
+                  const currentMsgs = [...useAppStore.getState().messages];
+                  let idx = msgIdForText ? currentMsgs.findIndex((m) => m.id === msgIdForText) : -1;
+                  
+                  if (idx === -1) {
+                    const lastIdx = currentMsgs.length - 1;
+                    if (lastIdx >= 0 && currentMsgs[lastIdx].type === "thinking" && currentMsgs[lastIdx].content === "") {
+                      currentMsgs[lastIdx] = {
+                        ...currentMsgs[lastIdx],
+                        id: msgIdForText || uuidv4(),
+                        type: "text",
+                        content: currentText,
+                        isStreaming: true,
+                      };
+                      idx = lastIdx;
+                    } else {
+                      const newId = msgIdForText || uuidv4();
+                      currentMsgs.push({
+                        id: newId,
+                        role: "assistant",
+                        type: "text",
+                        content: currentText,
+                        isStreaming: true,
+                        timestamp: Date.now(),
+                      });
+                      idx = currentMsgs.length - 1;
+                    }
+                    if (msgIdForText) activeTextMsgId = msgIdForText;
+                  } else {
+                    currentMsgs[idx] = {
+                      ...currentMsgs[idx],
+                      content: currentText,
+                      isStreaming: true,
+                    };
+                  }
+                  setMessages(currentMsgs);
+                  break;
+                }
 
                 case "thinking": {
-                  const thinkMsg: ChatMessage = {
-                    id: event.msgId || uuidv4(),
-                    role: "assistant",
-                    type: "thinking",
-                    content: event.content,
-                    timestamp: Date.now(),
-                  };
-                  // 在当前 AI 文本占位符之前插入
-                  addMessage(thinkMsg);
+                  const thinkMsgId: string = (event.msgId || activeThinkingTempId) as string;
+                  const currentMsgs = [...useAppStore.getState().messages];
+                  const idx = currentMsgs.findIndex((m) => m.id === thinkMsgId);
+                  
+                  if (idx !== -1) {
+                    currentMsgs[idx] = {
+                      ...currentMsgs[idx],
+                      content: event.content,
+                      isStreaming: true,
+                    };
+                  } else {
+                    const placeholderIdx = currentMsgs.findIndex((m) => m.id === activeThinkingTempId);
+                    if (placeholderIdx !== -1 && currentMsgs[placeholderIdx].content === "") {
+                      currentMsgs[placeholderIdx] = {
+                        ...currentMsgs[placeholderIdx],
+                        id: thinkMsgId,
+                        content: event.content,
+                      };
+                    } else {
+                      const lastIdx = currentMsgs.length - 1;
+                      if (lastIdx >= 0 && currentMsgs[lastIdx].isStreaming) {
+                        currentMsgs[lastIdx] = {
+                          ...currentMsgs[lastIdx],
+                          isStreaming: false,
+                        };
+                      }
+                      currentMsgs.push({
+                        id: thinkMsgId,
+                        role: "assistant",
+                        type: "thinking",
+                        content: event.content,
+                        isStreaming: true,
+                        timestamp: Date.now(),
+                        thinkingStartedAt: Date.now(),
+                      });
+                    }
+                  }
+                  activeThinkingMsgId = thinkMsgId;
+                  setMessages(currentMsgs);
                   break;
                 }
 
                 case "tool_call": {
-                  const toolMsg: ChatMessage = {
-                    id: event.msgId || uuidv4(),
+                  const toolMsgId = event.msgId || uuidv4();
+                  const currentMsgs = [...useAppStore.getState().messages];
+                  const lastIdx = currentMsgs.length - 1;
+                  if (lastIdx >= 0 && currentMsgs[lastIdx].isStreaming) {
+                    currentMsgs[lastIdx] = {
+                      ...currentMsgs[lastIdx],
+                      isStreaming: false,
+                    };
+                  }
+                  currentMsgs.push({
+                    id: toolMsgId,
                     role: "assistant",
                     type: "tool_call",
                     content: "",
@@ -224,8 +348,8 @@ export function ChatArea({
                       status: "done",
                     },
                     timestamp: Date.now(),
-                  };
-                  addMessage(toolMsg);
+                  });
+                  setMessages(currentMsgs);
                   break;
                 }
 
@@ -242,7 +366,15 @@ export function ChatArea({
                   break;
 
                 case "done": {
-                  updateLastMessage(currentText, false);
+                  const currentMsgs = [...useAppStore.getState().messages];
+                  const lastIdx = currentMsgs.length - 1;
+                  if (lastIdx >= 0 && currentMsgs[lastIdx].isStreaming) {
+                    currentMsgs[lastIdx] = {
+                      ...currentMsgs[lastIdx],
+                      isStreaming: false,
+                    };
+                    setMessages(currentMsgs);
+                  }
                   // 新会话：加入侧边栏会话列表
                   if (event.sessionId && !sessionId) {
                     addSession({
@@ -252,23 +384,31 @@ export function ChatArea({
                       lastActiveAt: Date.now(),
                       createdAt: Date.now(),
                     });
-                    // 更新 URL，使刷新后能恢复到此会话
                     window.history.replaceState(
                       null,
                       "",
                       `/chat/${projectId}/${event.sessionId}`
                     );
                     setCurrentSession(event.sessionId);
-                    // 更新 loadedKeyRef，防止下次 effect 重新加载
                     loadedKeyRef.current = `${projectId}:${event.sessionId}`;
                   }
                   break;
                 }
 
-                case "error":
+                case "error": {
                   toast.error(event.message || "AI 响应出错");
-                  updateLastMessage(currentText || "（发生错误）", false);
+                  const currentMsgs = [...useAppStore.getState().messages];
+                  const lastIdx = currentMsgs.length - 1;
+                  if (lastIdx >= 0 && currentMsgs[lastIdx].isStreaming) {
+                    currentMsgs[lastIdx] = {
+                      ...currentMsgs[lastIdx],
+                      content: currentMsgs[lastIdx].content || "（发生错误）",
+                      isStreaming: false,
+                    };
+                    setMessages(currentMsgs);
+                  }
                   break;
+                }
               }
             } catch {
               // 忽略解析错误
@@ -278,7 +418,16 @@ export function ChatArea({
       } catch (err) {
         if ((err as Error).name !== "AbortError") {
           toast.error("连接中断");
-          updateLastMessage("（连接中断）", false);
+          const currentMsgs = [...useAppStore.getState().messages];
+          const lastIdx = currentMsgs.length - 1;
+          if (lastIdx >= 0 && currentMsgs[lastIdx].isStreaming) {
+            currentMsgs[lastIdx] = {
+              ...currentMsgs[lastIdx],
+              content: currentMsgs[lastIdx].content || "（连接中断）",
+              isStreaming: false,
+            };
+            setMessages(currentMsgs);
+          }
         }
       } finally {
         setIsStreaming(false);
@@ -290,7 +439,7 @@ export function ChatArea({
       projectId,
       sessionId,
       addMessage,
-      updateLastMessage,
+      setMessages,
       setIsStreaming,
       setPendingPermission,
       setCurrentSession,
@@ -301,10 +450,15 @@ export function ChatArea({
   const handleStop = () => {
     abortRef.current?.abort();
     setIsStreaming(false);
-    updateLastMessage(
-      messages[messages.length - 1]?.content || "",
-      false
-    );
+    const currentMsgs = [...useAppStore.getState().messages];
+    const lastIdx = currentMsgs.length - 1;
+    if (lastIdx >= 0 && currentMsgs[lastIdx].isStreaming) {
+      currentMsgs[lastIdx] = {
+        ...currentMsgs[lastIdx],
+        isStreaming: false,
+      };
+      setMessages(currentMsgs);
+    }
   };
 
   const handleApprove = async (requestId: string) => {

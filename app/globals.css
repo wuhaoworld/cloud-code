@@ -128,3 +128,45 @@
     @apply font-sans;
   }
 }
+
+/* Custom highlight looping animation for "思考中" */
+@keyframes char-glow {
+  0%, 100% {
+    opacity: 0.5;
+    transform: scale(0.95);
+    color: var(--thinking-glow-start, #8b5cf6);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.15);
+    color: var(--thinking-glow-end, #6d28d9);
+    text-shadow: 0 0 8px var(--thinking-glow-shadow, rgba(139, 92, 246, 0.4));
+  }
+}
+
+.animate-glow-1 {
+  animation: char-glow 1.5s infinite ease-in-out;
+  animation-delay: 0s;
+}
+
+.animate-glow-2 {
+  animation: char-glow 1.5s infinite ease-in-out;
+  animation-delay: 0.2s;
+}
+
+.animate-glow-3 {
+  animation: char-glow 1.5s infinite ease-in-out;
+  animation-delay: 0.4s;
+}
+
+:root {
+  --thinking-glow-start: #8b5cf6;
+  --thinking-glow-end: #6d28d9;
+  --thinking-glow-shadow: rgba(139, 92, 246, 0.4);
+}
+
+.dark {
+  --thinking-glow-start: #a78bfa;
+  --thinking-glow-end: #c084fc;
+  --thinking-glow-shadow: rgba(167, 139, 250, 0.5);
+}

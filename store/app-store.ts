@@ -49,6 +49,7 @@ export interface ChatMessage {
   permissionRequest?: PermissionRequest;
   isStreaming?: boolean;
   timestamp: number;
+  thinkingStartedAt?: number;
 }
 
 interface AppState {
