@@ -11,6 +11,7 @@
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.183",
     "@base-ui/react": "^1.6.0",
+    "@libsql/client": "^0.17.4",
     "@streamdown/code": "^1.1.1",
     "better-auth": "^1.6.19",
     "better-sqlite3": "^12.11.1",
