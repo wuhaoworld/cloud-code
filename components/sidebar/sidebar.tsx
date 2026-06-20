@@ -8,8 +8,6 @@ import {
   Plus,
   Search,
   Settings,
-  Zap,
-  ChevronRight,
   Sparkles,
   MessageSquarePlus,
 } from "lucide-react";
@@ -74,7 +72,7 @@ export function AppSidebar() {
 
       {/* 项目区 */}
       <div className="flex-1 overflow-hidden flex flex-col">
-        <div className="flex items-center justify-between px-3 py-1">
+        <div className="flex items-center justify-between pl-5 pr-3 py-1">
           <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
             项目
           </span>
@@ -108,19 +106,6 @@ export function AppSidebar() {
           设置
         </Link>
 
-        <button
-          className={cn(
-            "w-full flex items-center justify-between px-2.5 py-2 rounded-md",
-            "text-sm bg-primary/5 hover:bg-primary/10 transition-colors text-primary"
-          )}
-          id="sidebar-upgrade-btn"
-        >
-          <div className="flex items-center gap-2">
-            <Zap className="size-4" />
-            <span className="font-medium">升级</span>
-          </div>
-          <ChevronRight className="size-3.5 opacity-60" />
-        </button>
       </div>
 
       <CreateProjectDialog open={createOpen} onOpenChange={setCreateOpen} />

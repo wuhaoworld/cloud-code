@@ -120,17 +120,17 @@ export function ProjectTree({ onNewSession }: ProjectTreeProps) {
 
   if (projects.length === 0) {
     return (
-      <div className="px-3 py-4 text-center">
+      <div className="px-4 py-4 text-center">
         <p className="text-xs text-muted-foreground">暂无项目</p>
         <p className="text-xs text-muted-foreground mt-0.5">
-          点击上方"+"新建项目
+          点击上方&quot;+&quot;新建项目
         </p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-0.5 py-1">
+    <div className="space-y-0.5 py-1 px-1">
       {projects.map((project) => {
         const isExpanded = expandedProjects.has(project.id);
         const isActive = currentProjectId === project.id;
@@ -141,7 +141,7 @@ export function ProjectTree({ onNewSession }: ProjectTreeProps) {
             {/* 项目行 — 点击整行展开/收起 */}
             <div
               className={cn(
-                "group flex items-center gap-1 px-2 py-1.5 rounded-md cursor-pointer",
+                "group flex items-center gap-1 px-3 py-1.5 rounded-md cursor-pointer",
                 "hover:bg-[#E8EBEB] transition-colors",
                 isActive && !currentSessionId && "bg-[#E8EBEB]"
               )}
@@ -154,7 +154,7 @@ export function ProjectTree({ onNewSession }: ProjectTreeProps) {
                 ) : (
                   <Folder className="size-3.5 text-muted-foreground shrink-0" />
                 )}
-                <span className="text-sm font-medium truncate leading-none">
+                <span className="text-sm truncate leading-none">
                   {project.name}
                 </span>
                 <ChevronRight
@@ -202,9 +202,9 @@ export function ProjectTree({ onNewSession }: ProjectTreeProps) {
 
             {/* 会话列表（展开后显示） */}
             {isExpanded && (
-              <div className="space-y-0.5 px-2">
+              <div className="space-y-0.5 mt-1">
                 {projectSessions.length === 0 ? (
-                  <div className="px-2 py-1.5">
+                  <div className="py-1.5 pr-3 pl-8">
                     <p className="text-xs text-muted-foreground">暂无对话</p>
                   </div>
                 ) : (
@@ -215,12 +215,12 @@ export function ProjectTree({ onNewSession }: ProjectTreeProps) {
                         key={sess.sessionId}
                         onClick={() => handleSelectSession(project, sess)}
                         className={cn(
-                          "w-full flex items-center gap-1.5 px-2 py-1.5 rounded-md text-left",
+                          "w-full flex items-center gap-1.5 py-1.5 pr-3 pl-8 rounded-md text-left",
                           "hover:bg-[#E8EBEB] transition-colors",
                           isSessionActive && "bg-[#E8EBEB]"
                         )}
                       >
-                        <span className="text-xs truncate flex-1 min-w-0">
+                        <span className="text-sm truncate flex-1 min-w-0">
                           {sess.title}
                         </span>
                         <span className="text-[10px] text-muted-foreground shrink-0">
