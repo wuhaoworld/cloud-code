@@ -113,7 +113,11 @@ export function ChatArea({
   }, [messages]);
 
   const handleSend = useCallback(
-    async (prompt: string) => {
+    async (
+      prompt: string,
+      _attachments?: import('@/components/chat/chat-input/AttachmentCard').AttachmentFile[],
+      _skillIds?: string[] | null,
+    ) => {
       if (isStreaming) return;
 
       // 生成用户消息 ID（同时传给服务端，用于 DB 写入时保持一致）
@@ -541,6 +545,7 @@ export function ChatArea({
             onSend={handleSend}
             onStop={handleStop}
             disabled={!currentProject || isLoadingHistory}
+            projectId={projectId}
           />
         </div>
       </div>
