@@ -30,7 +30,7 @@ export function AppSidebar() {
   return (
     <aside className="flex flex-col h-full bg-sidebar border-r border-sidebar-border select-none">
       {/* 顶部 Logo + 新对话 */}
-      <div className="flex items-center gap-2 px-3 pt-4 pb-2">
+      <div className="flex items-center gap-2 px-4 pt-4 pb-2">
         <div className="flex items-center gap-1.5 flex-1">
           <div className="size-6 rounded-md bg-primary flex items-center justify-center">
             <Sparkles className="size-3.5 text-primary-foreground" />

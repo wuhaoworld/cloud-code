@@ -41,26 +41,11 @@ export function ProjectTree({ onNewSession }: ProjectTreeProps) {
     setSessions,
     removeProject,
     toggleProjectExpanded,
+    setExpandedProjects,
     setCurrentProject,
     setCurrentSession,
     clearMessages,
   } = useAppStore();
-
-  // 加载项目列表
-  const loadProjects = useCallback(async () => {
-    try {
-      const res = await fetch("/api/projects");
-      if (!res.ok) return;
-      const data = await res.json();
-      setProjects(data);
-    } catch {
-      /* ignore */
-    }
-  }, [setProjects]);
-
-  useEffect(() => {
-    loadProjects();
-  }, [loadProjects]);
 
   // 加载项目的会话列表
   const loadSessions = useCallback(
@@ -76,6 +61,62 @@ export function ProjectTree({ onNewSession }: ProjectTreeProps) {
     },
     [setSessions]
   );
+
+  // 加载项目列表
+  const loadProjects = useCallback(async () => {
+    try {
+      const res = await fetch("/api/projects");
+      if (!res.ok) return;
+      const data = await res.json();
+      setProjects(data);
+
+      if (Array.isArray(data) && data.length > 0) {
+        let expandedIds: string[] = [];
+        let hasRecord = false;
+        if (typeof window !== "undefined") {
+          const stored = localStorage.getItem("expanded-projects");
+          if (stored !== null) {
+            try {
+              expandedIds = JSON.parse(stored);
+              hasRecord = true;
+            } catch {
+              /* ignore */
+            }
+          }
+        }
+
+        if (!hasRecord) {
+          // 如果没有记录，默认只展开第一个项目
+          expandedIds = [data[0].id];
+        }
+
+        // 仅保留属于当前项目的有效 ID
+        const validExpandedIds = expandedIds.filter((id) =>
+          data.some((p: Project) => p.id === id)
+        );
+
+        if (!hasRecord || validExpandedIds.length !== expandedIds.length) {
+          if (typeof window !== "undefined") {
+            localStorage.setItem("expanded-projects", JSON.stringify(validExpandedIds));
+          }
+        }
+
+        setExpandedProjects(validExpandedIds);
+        // 并行加载已被展开项目的会话列表
+        await Promise.all(
+          data
+            .filter((p: Project) => validExpandedIds.includes(p.id))
+            .map((p: Project) => loadSessions(p.id))
+        );
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [setProjects, setExpandedProjects, loadSessions]);
+
+  useEffect(() => {
+    loadProjects();
+  }, [loadProjects]);
 
   const handleToggleProject = async (project: Project) => {
     toggleProjectExpanded(project.id);

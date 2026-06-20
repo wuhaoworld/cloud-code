@@ -79,6 +79,7 @@ interface AppState {
   updateProject: (id: string, data: Partial<Project>) => void;
   removeProject: (id: string) => void;
   toggleProjectExpanded: (projectId: string) => void;
+  setExpandedProjects: (projectIds: string[]) => void;
   setCurrentProject: (projectId: string | null) => void;
 
   // Actions — 会话
@@ -141,8 +142,17 @@ export const useAppStore = create<AppState>()(
           } else {
             next.add(projectId);
           }
+          if (typeof window !== "undefined") {
+            localStorage.setItem("expanded-projects", JSON.stringify(Array.from(next)));
+          }
           return { expandedProjects: next };
         }),
+      setExpandedProjects: (projectIds) => {
+        if (typeof window !== "undefined") {
+          localStorage.setItem("expanded-projects", JSON.stringify(projectIds));
+        }
+        set({ expandedProjects: new Set(projectIds) });
+      },
       setCurrentProject: (projectId) =>
         set({ currentProjectId: projectId, currentSessionId: null, messages: [] }),
 
