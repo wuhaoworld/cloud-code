@@ -6,6 +6,8 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { Streamdown } from "streamdown";
 import { ToolCallCard } from "@/components/chat/tool-call-card";
 import type { ChatMessage } from "@/store/app-store";
+import { code } from '@streamdown/code';
+import { cjk } from '@streamdown/cjk';
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -48,8 +50,19 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   if (message.type === "thinking") {
     const hasContent = message.content && message.content.trim() !== "";
 
+    // 无思考内容时，仅显示"思考中"动画
+    if (!hasContent) {
+      return (
+        <div className="flex mb-4">
+          <div className="flex-1">
+            <span className="text-xs thinking-highlight font-medium">思考中</span>
+          </div>
+        </div>
+      );
+    }
+
     const label =
-      hasContent && !message.isStreaming
+      !message.isStreaming
         ? `已思考 ${thinkingDuration ?? 1} 秒`
         : "思考中";
 
@@ -76,15 +89,9 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           </button>
           {thinkingExpanded && (
             <div className="ml-0.5 my-2 pl-2 border-l-2 border-muted-foreground/15">
-              {hasContent ? (
-                <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">
-                  {message.content}
-                </p>
-              ) : (
-                <span className="text-xs text-muted-foreground/60 italic">
-                  正在生成思考内容…
-                </span>
-              )}
+              <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                {message.content}
+              </p>
             </div>
           )}
         </div>
@@ -127,6 +134,10 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         <Streamdown
           mode={message.isStreaming ? "streaming" : "static"}
           className="text-sm leading-relaxed text-foreground"
+          plugins={{ code, cjk }}
+          animated
+          linkSafety={{ enabled: false }}
+          controls={{ table: false }}
         >
           {message.content}
         </Streamdown>

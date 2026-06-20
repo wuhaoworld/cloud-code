@@ -29,7 +29,7 @@ const TOOL_ICONS: Record<string, React.ElementType> = {
 };
 
 const TOOL_LABELS: Record<string, string> = {
-  Bash: "终端命令",
+  Bash: "终端",
   FileRead: "读取文件",
   FileWrite: "写入文件",
   FileEdit: "编辑文件",
