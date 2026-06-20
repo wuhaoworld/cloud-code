@@ -17,8 +17,19 @@ export function MessageBubble({ message }: MessageBubbleProps) {
 
   if (message.isStreaming !== prevIsStreaming) {
     setPrevIsStreaming(message.isStreaming);
-    setThinkingExpanded(message.isStreaming ?? false);
+    if (message.isStreaming) {
+      setThinkingExpanded(true);
+    }
   }
+
+  useEffect(() => {
+    if (!message.isStreaming) {
+      const timer = setTimeout(() => {
+        setThinkingExpanded(false);
+      }, 800);
+      return () => clearTimeout(timer);
+    }
+  }, [message.isStreaming]);
 
   const [now, setNow] = useState(() => Date.now());
 
@@ -37,9 +48,10 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   if (message.type === "thinking") {
     const hasContent = message.content && message.content.trim() !== "";
 
-    const label = hasContent && !message.isStreaming
-      ? `已思考 ${thinkingDuration ?? 1} 秒`
-      : "思考中";
+    const label =
+      hasContent && !message.isStreaming
+        ? `已思考 ${thinkingDuration ?? 1} 秒`
+        : "思考中";
 
     return (
       <div className="flex mb-4">
@@ -48,18 +60,31 @@ export function MessageBubble({ message }: MessageBubbleProps) {
             onClick={() => setThinkingExpanded(!thinkingExpanded)}
             className="flex items-center gap-1 py-1.5 text-muted-foreground hover:text-foreground transition-colors"
           >
-            <span className="text-xs">{label}</span>
+            <span
+              className={cn(
+                "text-xs",
+                message.isStreaming ? "thinking-highlight font-medium" : ""
+              )}
+            >
+              {label}
+            </span>
             {thinkingExpanded ? (
               <ChevronDown className="size-3.5" />
             ) : (
               <ChevronRight className="size-3.5" />
             )}
           </button>
-          {thinkingExpanded && hasContent && (
+          {thinkingExpanded && (
             <div className="ml-0.5 my-2 pl-2 border-l-2 border-muted-foreground/15">
-              <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">
-                {message.content}
-              </p>
+              {hasContent ? (
+                <p className="text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                  {message.content}
+                </p>
+              ) : (
+                <span className="text-xs text-muted-foreground/60 italic">
+                  正在生成思考内容…
+                </span>
+              )}
             </div>
           )}
         </div>

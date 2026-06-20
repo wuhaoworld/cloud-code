@@ -64,7 +64,16 @@ export function ToolCallCard({ toolCall }: ToolCallCardProps) {
         className="w-full flex items-center gap-2 px-3 py-2 hover:bg-muted/60 transition-colors"
       >
         <Icon className="size-3.5 text-muted-foreground shrink-0" />
-        <span className="text-foreground font-medium">{label}</span>
+        <span
+          className={cn(
+            "font-medium transition-colors",
+            toolCall.status === "running"
+              ? "thinking-highlight"
+              : "text-foreground"
+          )}
+        >
+          {label}
+        </span>
 
         {/* 命令预览 */}
         {toolCall.input?.command && (
