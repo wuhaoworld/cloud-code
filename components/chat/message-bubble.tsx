@@ -53,7 +53,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   if (message.type === "tool_call" && message.toolCall) {
     return (
       <div className="flex mb-3">
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <ToolCallCard toolCall={message.toolCall} />
         </div>
       </div>

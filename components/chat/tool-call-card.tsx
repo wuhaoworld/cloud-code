@@ -96,11 +96,11 @@ export function ToolCallCard({ toolCall }: ToolCallCardProps) {
 
       {/* 展开内容 */}
       {expanded && (
-        <div className="border-t border-border/60 px-3 py-2 space-y-2">
+        <div className="border-t border-border/60 px-3 py-2 space-y-2 overflow-hidden">
           {/* 输入参数 */}
           <div>
             <p className="text-muted-foreground mb-1">输入参数</p>
-            <pre className="text-foreground font-mono bg-background/60 rounded p-2 overflow-x-auto text-[11px] leading-relaxed">
+            <pre className="text-foreground font-mono bg-background/60 rounded p-2 overflow-x-auto text-[11px] leading-relaxed max-w-full whitespace-pre-wrap break-all">
               {JSON.stringify(toolCall.input, null, 2)}
             </pre>
           </div>
@@ -109,7 +109,7 @@ export function ToolCallCard({ toolCall }: ToolCallCardProps) {
           {toolCall.result && (
             <div>
               <p className="text-muted-foreground mb-1">执行结果</p>
-              <pre className="text-foreground font-mono bg-background/60 rounded p-2 overflow-x-auto text-[11px] leading-relaxed max-h-40">
+              <pre className="text-foreground font-mono bg-background/60 rounded p-2 overflow-x-auto text-[11px] leading-relaxed max-h-40 max-w-full whitespace-pre-wrap break-all">
                 {toolCall.result}
               </pre>
             </div>
