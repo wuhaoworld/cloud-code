@@ -11,9 +11,8 @@ import {
   Sparkles,
   MessageSquarePlus,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Separator } from "@/components/ui/separator";
+
 import { ProjectTree } from "@/components/sidebar/project-tree";
 import { CreateProjectDialog } from "@/components/project/create-project-dialog";
 import { useAppStore } from "@/store/app-store";
@@ -68,12 +67,10 @@ export function AppSidebar() {
         </button>
       </div>
 
-      <Separator className="my-2 mx-2 w-auto" />
-
       {/* 项目区 */}
       <div className="flex-1 overflow-hidden flex flex-col">
         <div className="flex items-center justify-between pl-5 pr-3 py-1">
-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+          <span className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
             项目
           </span>
           <button
@@ -90,8 +87,6 @@ export function AppSidebar() {
           <ProjectTree onNewSession={() => {}} />
         </ScrollArea>
       </div>
-
-      <Separator className="mx-2 w-auto" />
 
       {/* 底部设置 + 升级 */}
       <div className="px-2 py-3 space-y-0.5">
