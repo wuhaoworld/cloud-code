@@ -11,6 +11,7 @@ import {
   MoreHorizontal,
   Trash2,
   Pencil,
+  SquarePen,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -169,10 +170,10 @@ export function ProjectTree({ onNewSession }: ProjectTreeProps) {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button
-                    className="shrink-0 p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-[#E8EBEB] transition-opacity"
+                    className="shrink-0 p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-black/10 transition-all"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <MoreHorizontal className="size-3.5 text-muted-foreground" />
+                    <MoreHorizontal className="size-3 text-muted-foreground/50" />
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-40">
@@ -198,6 +199,18 @@ export function ProjectTree({ onNewSession }: ProjectTreeProps) {
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
+
+              {/* 新建对话按钮 */}
+              <button
+                className="shrink-0 p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-black/10 transition-all"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleNewSession(project);
+                }}
+                title="新建对话"
+              >
+                <SquarePen className="size-3 text-muted-foreground/50" />
+              </button>
             </div>
 
             {/* 会话列表（展开后显示） */}
