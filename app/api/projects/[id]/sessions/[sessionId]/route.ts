@@ -59,7 +59,7 @@ export async function PATCH(
 
   // 置顶/取消置顶
   if (typeof body.pinned === "boolean") {
-    updates.pinnedAt = body.pinned ? Date.now() : null;
+    updates.pinnedAt = body.pinned ? new Date() : null;
   }
 
   if (Object.keys(updates).length === 0) {

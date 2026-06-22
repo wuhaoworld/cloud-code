@@ -65,6 +65,8 @@ export function ProjectTree({ onNewSession }: ProjectTreeProps) {
     title: string;
   } | null>(null);
   const [renameValue, setRenameValue] = useState("");
+  // 当前打开菜单的会话 ID
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   // 加载项目的会话列表
   const loadSessions = useCallback(
@@ -395,6 +397,7 @@ export function ProjectTree({ onNewSession }: ProjectTreeProps) {
                     .map((sess) => {
                       const isSessionActive = currentSessionId === sess.sessionId;
                       const isPinned = !!sess.pinnedAt;
+                      const isMenuOpen = openMenuId === sess.sessionId;
                       return (
                         <div
                           key={sess.sessionId}
@@ -409,18 +412,29 @@ export function ProjectTree({ onNewSession }: ProjectTreeProps) {
                             className="flex-1 min-w-0 text-left"
                           >
                             <span className="text-sm truncate block">
-                              {isPinned && (
-                                <Pin className="size-3 inline-block mr-1 text-muted-foreground" />
-                              )}
                               {sess.title}
                             </span>
                           </button>
-                          <DropdownMenu>
+                          {/* 置顶图标 — 非 hover 且菜单未打开时显示 */}
+                          {isPinned && !isMenuOpen && (
+                            <span className="shrink-0 p-1 group-hover:hidden">
+                              <Pin className="size-3 text-muted-foreground" />
+                            </span>
+                          )}
+                          {/* 更多按钮 — 置顶会话：hover 或菜单打开时显示；普通会话：hover 时显示 */}
+                          <DropdownMenu
+                            open={isMenuOpen}
+                            onOpenChange={(open) =>
+                              setOpenMenuId(open ? sess.sessionId : null)
+                            }
+                          >
                             <DropdownMenuTrigger asChild>
                               <button
                                 className={cn(
-                                  "shrink-0 p-1 rounded opacity-0 group-hover:opacity-100",
-                                  "hover:bg-black/10 data-[state=open]:bg-black/10 data-[state=open]:opacity-100",
+                                  "shrink-0 p-1 rounded",
+                                  isPinned
+                                    ? "hidden group-hover:block hover:bg-black/10 data-[state=open]:block data-[state=open]:bg-black/10"
+                                    : "opacity-0 group-hover:opacity-100 hover:bg-black/10 data-[state=open]:bg-black/10 data-[state=open]:opacity-100",
                                   "transition-all"
                                 )}
                                 onClick={(e) => e.stopPropagation()}
