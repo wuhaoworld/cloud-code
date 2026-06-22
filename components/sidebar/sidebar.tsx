@@ -2,10 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   FolderPlus,
+  Package,
   Search,
   Settings,
   Sparkles,
@@ -18,6 +19,7 @@ import { useAppStore } from "@/store/app-store";
 
 export function AppSidebar() {
   const router = useRouter();
+  const pathname = usePathname();
   const [createOpen, setCreateOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const { setCurrentProject, setCurrentSession, clearMessages } = useAppStore();
@@ -67,6 +69,18 @@ export function AppSidebar() {
           <Search className="size-4 text-muted-foreground" />
           搜索
         </button>
+        <Link
+          href="/plugins"
+          className={cn(
+            "w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md",
+            "text-sm text-foreground hover:bg-[#EBEBED] transition-colors cursor-default",
+            pathname === "/plugins" && "bg-[#EBEBED]"
+          )}
+          id="sidebar-plugins-link"
+        >
+          <Package className="size-4 text-muted-foreground" />
+          插件
+        </Link>
       </div>
 
       {/* 项目区 */}

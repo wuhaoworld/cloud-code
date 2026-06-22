@@ -2,7 +2,7 @@
 
 import { cn } from "@/lib/utils";
 import { useEffect, useRef, useState } from "react";
-import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Copy, Loader2 } from "lucide-react";
 import { Streamdown } from "streamdown";
 import { ToolCallCard } from "@/components/chat/tool-call-card";
 import type { Message, TextBlock, ThinkingBlock } from "@/store/types";
@@ -14,17 +14,121 @@ interface MessageBubbleProps {
   message: Message;
 }
 
+// ---- 时间格式化 ----
+
+function formatTime(ts: number): string {
+  const d = new Date(ts);
+  const now = new Date();
+  const isToday =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate();
+
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+
+  if (isToday) return `${hh}:${mm}`;
+
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const isYesterday =
+    d.getFullYear() === yesterday.getFullYear() &&
+    d.getMonth() === yesterday.getMonth() &&
+    d.getDate() === yesterday.getDate();
+
+  if (isYesterday) return `昨天 ${hh}:${mm}`;
+
+  const M = d.getMonth() + 1;
+  const D = d.getDate();
+  return `${M}/${D} ${hh}:${mm}`;
+}
+
+// ---- 复制 Hook ----
+
+function useCopy(text: string) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+  return { copied, copy };
+}
+
+// ---- 消息元数据组件 ----
+
+function MessageMeta({
+  ts,
+  text,
+  align,
+}: {
+  ts: number;
+  text: string;
+  align: "left" | "right";
+}) {
+  const { copied, copy } = useCopy(text);
+
+  return (
+    <div
+      className={cn(
+        "flex items-center gap-1.5 mt-1 opacity-0 group-hover/msg:opacity-100 transition-opacity",
+        align === "right" ? "justify-end" : "justify-start"
+      )}
+    >
+      {align === "left" && (
+        <button
+          onClick={copy}
+          className="text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+          title="复制"
+        >
+          {copied ? (
+            <Check className="size-3" />
+          ) : (
+            <Copy className="size-3" />
+          )}
+        </button>
+      )}
+      <span className="text-[11px] text-muted-foreground/50 select-none">
+        {formatTime(ts)}
+      </span>
+      {align === "right" && (
+        <button
+          onClick={copy}
+          className="text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+          title="复制"
+        >
+          {copied ? (
+            <Check className="size-3" />
+          ) : (
+            <Copy className="size-3" />
+          )}
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ---- 复制文本提取 ----
+
+function extractText(message: Message): string {
+  return message.blocks
+    .filter((b): b is TextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("\n");
+}
+
 export function MessageBubble({ message }: MessageBubbleProps) {
   const isStreaming = message.status === "streaming";
 
   if (message.role === "user") {
     const text = message.blocks.find((b): b is TextBlock => b.type === "text")?.text ?? "";
     return (
-      <div className="flex mb-4 justify-end">
+      <div className="group/msg flex mb-4 justify-end">
         <div className="max-w-[80%]">
           <div className="rounded-2xl rounded-tr-sm px-4 py-2.5 bg-muted text-foreground text-sm leading-relaxed whitespace-pre-wrap">
             {text}
           </div>
+          <MessageMeta ts={message.createdAt} text={text} align="right" />
         </div>
       </div>
     );
@@ -44,7 +148,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   }
 
   return (
-    <div className="flex flex-col mb-4 gap-2">
+    <div className="group/msg flex flex-col mb-4 gap-2">
       {message.blocks.map((block, i) => {
         const isLastBlock = i === message.blocks.length - 1;
         if (block.type === "thinking") {
@@ -68,6 +172,13 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           />
         );
       })}
+      {!isStreaming && (
+        <MessageMeta
+          ts={message.createdAt}
+          text={extractText(message)}
+          align="left"
+        />
+      )}
     </div>
   );
 }
