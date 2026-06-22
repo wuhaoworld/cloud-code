@@ -220,7 +220,7 @@ export function ProjectTree({ onNewSession }: ProjectTreeProps) {
                     <MoreHorizontal className="size-3 text-muted-foreground/50" />
                   </button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-40">
+                <DropdownMenuContent className="w-40">
                   <DropdownMenuItem
                     onClick={(e) => {
                       e.stopPropagation();

@@ -142,7 +142,7 @@ export function SessionActionsMenu({
             />
           </button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-36">
+        <DropdownMenuContent  className="w-36">
           <DropdownMenuItem
             onClick={(e) => {
               e.stopPropagation();
