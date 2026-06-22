@@ -153,7 +153,11 @@ export async function POST(req: NextRequest) {
             });
 
             const decision = await new Promise<
-              | { behavior: "allow"; updatedPermissions?: import("@anthropic-ai/claude-agent-sdk").PermissionUpdate[] }
+              | {
+                  behavior: "allow";
+                  updatedInput?: Record<string, unknown>;
+                  updatedPermissions?: import("@anthropic-ai/claude-agent-sdk").PermissionUpdate[];
+                }
               | { behavior: "deny"; message: string }
             >(
               (resolve) => {
@@ -189,7 +193,7 @@ export async function POST(req: NextRequest) {
             );
 
             emit("permission_resolved", { requestId, behavior: decision.behavior });
-            return toPermissionResult(decision, toolUseID);
+            return toPermissionResult(decision, toolUseID, input);
           },
         };
 

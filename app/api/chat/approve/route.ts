@@ -35,7 +35,11 @@ export async function POST(req: NextRequest) {
   clearTimeout(pending.timeout);
   pending.resolve(
     action === "approve"
-      ? { behavior: "allow", updatedPermissions: pending.suggestions }
+      ? {
+          behavior: "allow",
+          updatedInput: pending.input,
+          updatedPermissions: pending.suggestions,
+        }
       : { behavior: "deny", message: "Permission denied by user." }
   );
 
