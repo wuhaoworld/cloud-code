@@ -228,3 +228,7 @@
     background-position: -20% 50%;
   }
 }
+
+[data-streamdown="list-item"] {
+  margin-left: 1.3em;
+ }
