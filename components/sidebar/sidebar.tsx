@@ -67,13 +67,13 @@ export function AppSidebar() {
 
       {/* 项目区 */}
       <div className="flex-1 overflow-hidden flex flex-col">
-        <div className="flex items-center justify-between pl-5 pr-3 py-1">
+        <div className="group flex items-center justify-between pl-5 pr-3 py-1">
           <span className="text-xs font-medium text-muted-foreground/60 uppercase tracking-wider">
             项目
           </span>
           <button
             onClick={() => setCreateOpen(true)}
-            className="size-5 flex items-center justify-center rounded hover:bg-[#EBEBED] text-muted-foreground hover:text-foreground transition-colors"
+            className="size-5 flex items-center justify-center rounded hover:bg-[#EBEBED] text-muted-foreground hover:text-foreground transition opacity-0 group-hover:opacity-100"
             id="sidebar-new-project-btn"
             title="新建项目"
           >
