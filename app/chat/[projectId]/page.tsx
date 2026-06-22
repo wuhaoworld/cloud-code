@@ -152,25 +152,27 @@ export function ChatArea({
 
   const loadedKeyRef = useRef<string>("");
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const isStreamingRef = useRef(isStreaming);
+  useEffect(() => { isStreamingRef.current = isStreaming; }, [isStreaming]);
 
   const searchParams = useSearchParams();
   const promptParam = searchParams.get("prompt");
   const initialSentRef = useRef(false);
 
-  // 切换会话/项目时初始化
-  useEffect(() => {
-    setCurrentProject(projectId);
-    if (sessionId) setCurrentSession(sessionId);
-  }, [projectId, sessionId, setCurrentProject, setCurrentSession]);
-
-  // 加载历史消息
+  // 切换会话/项目时初始化 & 加载历史消息（合并为单个 effect，避免 setCurrentProject 清除流式消息）
   useEffect(() => {
     const key = `${projectId}:${sessionId ?? "new"}`;
     if (loadedKeyRef.current === key) return;
     loadedKeyRef.current = key;
 
+    setCurrentProject(projectId);
+    if (sessionId) setCurrentSession(sessionId);
+
     if (!sessionId) {
-      clearMessages();
+      // 如果有来自 welcome 页的 prompt，不要清除消息——handleSend 会添加用户/助手消息
+      if (!promptParam) {
+        clearMessages();
+      }
       return;
     }
 
@@ -202,7 +204,8 @@ export function ChatArea({
       .finally(() => {
         setIsLoadingHistory(false);
       });
-  }, [projectId, sessionId, setMessages, clearMessages]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId, sessionId, promptParam]);
 
   // 自动滚动到底部
   useEffect(() => {
@@ -215,7 +218,7 @@ export function ChatArea({
       _attachments?: import("@/components/chat/chat-input/AttachmentCard").AttachmentFile[],
       _skillIds?: string[] | null
     ) => {
-      if (isStreaming) return;
+      if (isStreamingRef.current) return;
 
       await send({
         projectId,
@@ -235,7 +238,7 @@ export function ChatArea({
         },
       });
     },
-    [isStreaming, projectId, sessionId, currentSessionId, send, addSession, setCurrentSession]
+    [projectId, sessionId, currentSessionId, send, addSession, setCurrentSession]
   );
 
   const handleStop = useCallback(() => {

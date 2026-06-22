@@ -141,7 +141,10 @@ export const useAppStore = create<AppState>()(
         set({ expandedProjects: new Set(projectIds) });
       },
       setCurrentProject: (projectId) =>
-        set({ currentProjectId: projectId, currentSessionId: null, messages: [] }),
+        set((state) => {
+          if (state.currentProjectId === projectId) return state;
+          return { currentProjectId: projectId, currentSessionId: null, messages: [], isStreaming: false };
+        }),
 
       // Session actions
       setSessions: (projectId, sessions) =>
