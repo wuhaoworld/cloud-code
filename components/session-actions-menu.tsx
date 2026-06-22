@@ -49,6 +49,7 @@ export function SessionActionsMenu({
   const [open, setOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState(title);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const handleTogglePin = async () => {
     try {
@@ -167,7 +168,7 @@ export function SessionActionsMenu({
           <DropdownMenuItem
             onClick={(e) => {
               e.stopPropagation();
-              handleDelete();
+              setDeleteOpen(true);
             }}
             className="gap-2"
           >
@@ -197,6 +198,32 @@ export function SessionActionsMenu({
               取消
             </Button>
             <Button onClick={handleRename}>确认</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* 删除确认对话框 */}
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>删除对话</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            确定要删除对话「{title}」吗？此操作无法撤销。
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteOpen(false)}>
+              取消
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                setDeleteOpen(false);
+                handleDelete();
+              }}
+            >
+              删除
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

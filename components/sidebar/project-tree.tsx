@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
@@ -22,6 +22,14 @@ import {
 import { useAppStore } from "@/store/app-store";
 import type { Project, ProjectSession } from "@/store/app-store";
 import { SessionActionsMenu } from "@/components/session-actions-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
 interface ProjectTreeProps {
@@ -140,6 +148,14 @@ export function ProjectTree({ onNewSession }: ProjectTreeProps) {
     onNewSession?.(project.id);
   };
 
+  // 记录哪些项目展开了全部会话（超过 5 个时使用）
+  const [expandedAllSessions, setExpandedAllSessions] = useState<Set<string>>(new Set());
+
+  const [deleteProjectInfo, setDeleteProjectInfo] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+
   const handleDeleteProject = async (projectId: string, name: string) => {
     try {
       const res = await fetch(`/api/projects/${projectId}`, {
@@ -241,7 +257,7 @@ export function ProjectTree({ onNewSession }: ProjectTreeProps) {
                   <DropdownMenuItem
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleDeleteProject(project.id, project.name);
+                      setDeleteProjectInfo({ id: project.id, name: project.name });
                     }}
                     className="gap-2"
                   >
@@ -265,60 +281,124 @@ export function ProjectTree({ onNewSession }: ProjectTreeProps) {
             </div>
 
             {/* 会话列表（展开后显示） */}
-            {isExpanded && (
-              <div className="space-y-0.5 mt-1">
-                {projectSessions.length === 0 ? (
-                  <div className="py-1.5 pr-3 pl-8">
-                    <p className="text-xs text-muted-foreground">暂无对话</p>
-                  </div>
-                ) : (
-                  [...projectSessions]
-                    .sort((a, b) => {
-                      // 置顶的会话排在最前面
-                      const aPinned = a.pinnedAt ? 1 : 0;
-                      const bPinned = b.pinnedAt ? 1 : 0;
-                      if (aPinned !== bPinned) return bPinned - aPinned;
-                      // 同状态按最近活跃时间排序
-                      return b.lastActiveAt - a.lastActiveAt;
-                    })
-                    .map((sess) => {
-                      const isSessionActive = currentSessionId === sess.sessionId;
-                      const isPinned = !!sess.pinnedAt;
-                      return (
-                        <div
-                          key={sess.sessionId}
-                          className={cn(
-                            "group flex items-center gap-1 py-1.5 pr-1 pl-8 rounded-md",
-                            "hover:bg-[#EBEBED] transition-colors",
-                            isSessionActive && "bg-[#EBEBED]"
-                          )}
-                        >
-                          <button
-                            onClick={() => handleSelectSession(project, sess)}
-                            className="flex-1 min-w-0 text-left"
+            {isExpanded && (() => {
+              const sortedSessions = [...projectSessions].sort((a, b) => {
+                // 置顶的会话排在最前面
+                const aPinned = a.pinnedAt ? 1 : 0;
+                const bPinned = b.pinnedAt ? 1 : 0;
+                if (aPinned !== bPinned) return bPinned - aPinned;
+                // 同状态按最近活跃时间排序
+                return b.lastActiveAt - a.lastActiveAt;
+              });
+              const SESSION_LIMIT = 5;
+              const hasMore = sortedSessions.length > SESSION_LIMIT;
+              const isAllExpanded = expandedAllSessions.has(project.id);
+              const visibleSessions = hasMore && !isAllExpanded
+                ? sortedSessions.slice(0, SESSION_LIMIT)
+                : sortedSessions;
+
+              return (
+                <div className="space-y-0.5 mt-1">
+                  {sortedSessions.length === 0 ? (
+                    <div className="py-1.5 pr-3 pl-8">
+                      <p className="text-xs text-muted-foreground">暂无对话</p>
+                    </div>
+                  ) : (
+                    <>
+                      {visibleSessions.map((sess) => {
+                        const isSessionActive = currentSessionId === sess.sessionId;
+                        const isPinned = !!sess.pinnedAt;
+                        return (
+                          <div
+                            key={sess.sessionId}
+                            className={cn(
+                              "group flex items-center gap-1 py-1.5 pr-1 pl-8 rounded-md",
+                              "hover:bg-[#EBEBED] transition-colors",
+                              isSessionActive && "bg-[#EBEBED]"
+                            )}
                           >
-                            <span className="text-sm truncate block">
-                              {sess.title}
-                            </span>
-                          </button>
-                          <SessionActionsMenu
-                            projectId={project.id}
-                            sessionId={sess.sessionId}
-                            title={sess.title}
-                            pinnedAt={sess.pinnedAt}
-                            sidebarMode
-                            isPinned={isPinned}
-                          />
-                        </div>
-                      );
-                    })
-                )}
-              </div>
-            )}
+                            <button
+                              onClick={() => handleSelectSession(project, sess)}
+                              className="flex-1 min-w-0 text-left"
+                            >
+                              <span className="text-sm truncate block">
+                                {sess.title}
+                              </span>
+                            </button>
+                            <SessionActionsMenu
+                              projectId={project.id}
+                              sessionId={sess.sessionId}
+                              title={sess.title}
+                              pinnedAt={sess.pinnedAt}
+                              sidebarMode
+                              isPinned={isPinned}
+                            />
+                          </div>
+                        );
+                      })}
+                      {hasMore && (
+                        <button
+                          className="w-full py-1.5 pl-8 pr-1 text-left text-xs text-muted-foreground hover:text-foreground transition-colors"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setExpandedAllSessions((prev) => {
+                              const next = new Set(prev);
+                              if (next.has(project.id)) {
+                                next.delete(project.id);
+                              } else {
+                                next.add(project.id);
+                              }
+                              return next;
+                            });
+                          }}
+                        >
+                          {isAllExpanded ? "折叠展示" : "展开全部"}
+                        </button>
+                      )}
+                    </>
+                  )}
+                </div>
+              );
+            })()}
           </div>
         );
       })}
 
+      {/* 删除项目确认对话框 */}
+      <Dialog
+        open={!!deleteProjectInfo}
+        onOpenChange={(open) => {
+          if (!open) setDeleteProjectInfo(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>删除项目</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            确定要删除项目「{deleteProjectInfo?.name}」吗？该项目下的所有对话将一并删除，此操作无法撤销。
+          </p>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setDeleteProjectInfo(null)}
+            >
+              取消
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                if (deleteProjectInfo) {
+                  handleDeleteProject(deleteProjectInfo.id, deleteProjectInfo.name);
+                  setDeleteProjectInfo(null);
+                }
+              }}
+            >
+              删除
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
