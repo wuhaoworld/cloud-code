@@ -11,8 +11,9 @@ export interface SendOptions {
   prompt: string;
   sessionId?: string;
   model?: string;
+  optimisticSessionId?: string;
   /** 发现新会话 ID 时的回调（新对话首条消息） */
-  onNewSession?: (sessionId: string) => void;
+  onNewSession?: (sessionId: string, optimisticSessionId?: string) => void;
 }
 
 function parseSSEChunk(chunk: string): { eventType: string; data: Record<string, unknown> } | null {
@@ -40,14 +41,13 @@ export function useAgentStream() {
   const applyStreamEvent = useAppStore((s) => s.applyStreamEvent);
   const addMessage = useAppStore((s) => s.addMessage);
   const setIsStreaming = useAppStore((s) => s.setIsStreaming);
-  const addSession = useAppStore((s) => s.addSession);
   const setCurrentSession = useAppStore((s) => s.setCurrentSession);
 
   const abortRef = useRef<AbortController | null>(null);
 
   const send = useCallback(
     async (opts: SendOptions) => {
-      const { projectId, prompt, sessionId, model, onNewSession } = opts;
+      const { projectId, prompt, sessionId, model, optimisticSessionId, onNewSession } = opts;
 
       const userMsgId = uuidv4();
       const assistantMsgId = uuidv4();
@@ -115,14 +115,7 @@ export function useAgentStream() {
               const newSessionId = data.sessionId as string;
               setCurrentSession(newSessionId);
               if (!sessionId && onNewSession) {
-                onNewSession(newSessionId);
-                addSession({
-                  sessionId: newSessionId,
-                  projectId,
-                  title: prompt.slice(0, 50) + (prompt.length > 50 ? "..." : ""),
-                  lastActiveAt: Date.now(),
-                  createdAt: Date.now(),
-                });
+                onNewSession(newSessionId, optimisticSessionId);
               }
               continue;
             }
@@ -165,7 +158,7 @@ export function useAgentStream() {
         abortRef.current = null;
       }
     },
-    [applyStreamEvent, addMessage, setIsStreaming, addSession, setCurrentSession]
+    [applyStreamEvent, addMessage, setIsStreaming, setCurrentSession]
   );
 
   const interrupt = useCallback(() => {

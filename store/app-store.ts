@@ -77,6 +77,7 @@ interface AppState {
   // Actions — 会话
   setSessions: (projectId: string, sessions: ProjectSession[]) => void;
   addSession: (session: ProjectSession) => void;
+  replaceSession: (projectId: string, sessionId: string, session: ProjectSession) => void;
   updateSession: (projectId: string, sessionId: string, data: Partial<ProjectSession>) => void;
   removeSession: (projectId: string, sessionId: string) => void;
   setCurrentSession: (sessionId: string | null) => void;
@@ -148,7 +149,17 @@ export const useAppStore = create<AppState>()(
 
       // Session actions
       setSessions: (projectId, sessions) =>
-        set((state) => ({ sessions: { ...state.sessions, [projectId]: sessions } })),
+        set((state) => {
+          const pendingSessions = (state.sessions[projectId] || []).filter((session) =>
+            session.sessionId.startsWith("pending-")
+          );
+          return {
+            sessions: {
+              ...state.sessions,
+              [projectId]: [...pendingSessions, ...sessions],
+            },
+          };
+        }),
       addSession: (session) =>
         set((state) => {
           const existing = state.sessions[session.projectId] || [];
@@ -160,6 +171,22 @@ export const useAppStore = create<AppState>()(
               ...state.sessions,
               [session.projectId]: [session, ...existing],
             },
+          };
+        }),
+      replaceSession: (projectId, sessionId, session) =>
+        set((state) => {
+          const existing = state.sessions[projectId] || [];
+          const withoutOld = existing.filter((s) => s.sessionId !== sessionId);
+          const hasNew = withoutOld.some((s) => s.sessionId === session.sessionId);
+          return {
+            sessions: {
+              ...state.sessions,
+              [projectId]: hasNew ? withoutOld : [session, ...withoutOld],
+            },
+            currentSessionId:
+              state.currentSessionId === sessionId
+                ? session.sessionId
+                : state.currentSessionId,
           };
         }),
       updateSession: (projectId, sessionId, data) =>

@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { SessionActionsMenu } from "@/components/session-actions-menu";
+import { v4 as uuidv4 } from "uuid";
 
 interface ChatPageProps {
   params: Promise<{ projectId: string }>;
@@ -130,6 +131,7 @@ export function ChatArea({
   const {
     projects,
     sessions,
+    expandedProjects,
     currentSessionId,
     messages,
     isStreaming,
@@ -140,6 +142,8 @@ export function ChatArea({
     setCurrentSession,
     clearMessages,
     addSession,
+    replaceSession,
+    setExpandedProjects,
   } = useAppStore();
 
   const { send, interrupt } = useAgentStream();
@@ -221,25 +225,60 @@ export function ChatArea({
     ) => {
       if (isStreamingRef.current) return;
 
+      const activeSessionId = currentSessionId ?? sessionId;
+      const optimisticSessionId = activeSessionId ? undefined : `pending-${uuidv4()}`;
+      const title = prompt.slice(0, 50) + (prompt.length > 50 ? "..." : "");
+      const now = Date.now();
+
+      if (optimisticSessionId) {
+        if (!expandedProjects.has(projectId)) {
+          setExpandedProjects([...Array.from(expandedProjects), projectId]);
+        }
+        addSession({
+          sessionId: optimisticSessionId,
+          projectId,
+          title,
+          lastActiveAt: now,
+          createdAt: now,
+        });
+        setCurrentSession(optimisticSessionId);
+      }
+
       await send({
         projectId,
         prompt,
-        sessionId: currentSessionId ?? sessionId,
-        onNewSession: (newSessionId) => {
-          addSession({
+        sessionId: activeSessionId,
+        optimisticSessionId,
+        onNewSession: (newSessionId, pendingSessionId) => {
+          const session = {
             sessionId: newSessionId,
             projectId,
-            title: prompt.slice(0, 50) + (prompt.length > 50 ? "..." : ""),
+            title,
             lastActiveAt: Date.now(),
             createdAt: Date.now(),
-          });
+          };
+          if (pendingSessionId) {
+            replaceSession(projectId, pendingSessionId, session);
+          } else {
+            addSession(session);
+          }
           window.history.replaceState(null, "", `/chat/${projectId}/${newSessionId}`);
           setCurrentSession(newSessionId);
           loadedKeyRef.current = `${projectId}:${newSessionId}`;
         },
       });
     },
-    [projectId, sessionId, currentSessionId, send, addSession, setCurrentSession]
+    [
+      projectId,
+      sessionId,
+      currentSessionId,
+      expandedProjects,
+      send,
+      addSession,
+      replaceSession,
+      setCurrentSession,
+      setExpandedProjects,
+    ]
   );
 
   const handleStop = useCallback(() => {

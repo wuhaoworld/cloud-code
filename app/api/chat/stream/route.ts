@@ -164,10 +164,25 @@ export async function POST(req: NextRequest) {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const initMsg = message as any;
             if (initMsg.session_id) {
-              newSessionId = initMsg.session_id;
+              const initializedSessionId = initMsg.session_id as string;
+              newSessionId = initializedSessionId;
               // 仅在真正新建会话时重置 sortBase；恢复已有会话时保留从数据库计算的值
               if (!sessionId) {
                 sortBase = 0;
+                const now = new Date();
+                await db
+                  .insert(projectSessions)
+                  .values({
+                    sessionId: initializedSessionId,
+                    projectId,
+                    title: prompt.slice(0, 50) + (prompt.length > 50 ? "..." : ""),
+                    lastActiveAt: now,
+                    createdAt: now,
+                  })
+                  .onConflictDoUpdate({
+                    target: projectSessions.sessionId,
+                    set: { lastActiveAt: now },
+                  });
               }
               emit("session_init", { sessionId: newSessionId });
             }
