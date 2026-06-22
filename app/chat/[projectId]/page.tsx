@@ -10,6 +10,7 @@ import { useAgentStream } from "@/hooks/use-agent-stream";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
+import { SessionActionsMenu } from "@/components/session-actions-menu";
 
 interface ChatPageProps {
   params: Promise<{ projectId: string }>;
@@ -293,6 +294,12 @@ export function ChatArea({
           <>
             <span className="text-border text-xs">/</span>
             <span className="text-sm text-foreground truncate">{currentSession.title}</span>
+            <SessionActionsMenu
+              projectId={projectId}
+              sessionId={currentSession.sessionId}
+              title={currentSession.title}
+              pinnedAt={currentSession.pinnedAt}
+            />
           </>
         )}
         {(isStreaming || isLoadingHistory) && (

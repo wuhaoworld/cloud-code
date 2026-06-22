@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useCallback, useState } from "react";
+import { useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
@@ -12,7 +12,6 @@ import {
   Trash2,
   Pencil,
   SquarePen,
-  Pin,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -20,17 +19,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { useAppStore } from "@/store/app-store";
 import type { Project, ProjectSession } from "@/store/app-store";
+import { SessionActionsMenu } from "@/components/session-actions-menu";
 import { toast } from "sonner";
 
 interface ProjectTreeProps {
@@ -48,25 +39,12 @@ export function ProjectTree({ onNewSession }: ProjectTreeProps) {
     setProjects,
     setSessions,
     removeProject,
-    updateSession,
-    removeSession,
     toggleProjectExpanded,
     setExpandedProjects,
     setCurrentProject,
     setCurrentSession,
     clearMessages,
   } = useAppStore();
-
-  // 重命名对话状态
-  const [renameOpen, setRenameOpen] = useState(false);
-  const [renameTarget, setRenameTarget] = useState<{
-    projectId: string;
-    sessionId: string;
-    title: string;
-  } | null>(null);
-  const [renameValue, setRenameValue] = useState("");
-  // 当前打开菜单的会话 ID
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   // 加载项目的会话列表
   const loadSessions = useCallback(
@@ -175,97 +153,6 @@ export function ProjectTree({ onNewSession }: ProjectTreeProps) {
       toast.success(`项目 "${name}" 已删除`);
       if (currentProjectId === projectId) {
         router.push("/chat");
-      }
-    } catch {
-      toast.error("网络错误");
-    }
-  };
-
-  // 置顶/取消置顶会话
-  const handleTogglePin = async (
-    projectId: string,
-    sessionId: string,
-    isPinned: boolean
-  ) => {
-    try {
-      const res = await fetch(
-        `/api/projects/${projectId}/sessions/${sessionId}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ pinned: !isPinned }),
-        }
-      );
-      if (!res.ok) {
-        toast.error(isPinned ? "取消置顶失败" : "置顶失败");
-        return;
-      }
-      updateSession(projectId, sessionId, {
-        pinnedAt: isPinned ? null : Date.now(),
-      });
-      toast.success(isPinned ? "已取消置顶" : "已置顶");
-    } catch {
-      toast.error("网络错误");
-    }
-  };
-
-  // 打开重命名对话框
-  const openRenameDialog = (
-    projectId: string,
-    sessionId: string,
-    title: string
-  ) => {
-    setRenameTarget({ projectId, sessionId, title });
-    setRenameValue(title);
-    setRenameOpen(true);
-  };
-
-  // 提交重命名
-  const handleRename = async () => {
-    if (!renameTarget || !renameValue.trim()) return;
-    const { projectId, sessionId } = renameTarget;
-    try {
-      const res = await fetch(
-        `/api/projects/${projectId}/sessions/${sessionId}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title: renameValue.trim() }),
-        }
-      );
-      if (!res.ok) {
-        toast.error("重命名失败");
-        return;
-      }
-      updateSession(projectId, sessionId, { title: renameValue.trim() });
-      setRenameOpen(false);
-      setRenameTarget(null);
-    } catch {
-      toast.error("网络错误");
-    }
-  };
-
-  // 删除会话
-  const handleDeleteSession = async (
-    projectId: string,
-    sessionId: string,
-    title: string
-  ) => {
-    try {
-      const res = await fetch(
-        `/api/projects/${projectId}/sessions/${sessionId}`,
-        {
-          method: "DELETE",
-        }
-      );
-      if (!res.ok) {
-        toast.error("删除失败");
-        return;
-      }
-      removeSession(projectId, sessionId);
-      toast.success(`对话 "${title}" 已删除`);
-      if (currentSessionId === sessionId) {
-        router.push(`/chat/${projectId}`);
       }
     } catch {
       toast.error("网络错误");
@@ -397,7 +284,6 @@ export function ProjectTree({ onNewSession }: ProjectTreeProps) {
                     .map((sess) => {
                       const isSessionActive = currentSessionId === sess.sessionId;
                       const isPinned = !!sess.pinnedAt;
-                      const isMenuOpen = openMenuId === sess.sessionId;
                       return (
                         <div
                           key={sess.sessionId}
@@ -415,78 +301,14 @@ export function ProjectTree({ onNewSession }: ProjectTreeProps) {
                               {sess.title}
                             </span>
                           </button>
-                          {/* 置顶图标 — 非 hover 且菜单未打开时显示 */}
-                          {isPinned && !isMenuOpen && (
-                            <span className="shrink-0 p-1 group-hover:hidden">
-                              <Pin className="size-3 text-muted-foreground" />
-                            </span>
-                          )}
-                          {/* 更多按钮 — 置顶会话：hover 或菜单打开时显示；普通会话：hover 时显示 */}
-                          <DropdownMenu
-                            open={isMenuOpen}
-                            onOpenChange={(open) =>
-                              setOpenMenuId(open ? sess.sessionId : null)
-                            }
-                          >
-                            <DropdownMenuTrigger asChild>
-                              <button
-                                className={cn(
-                                  "shrink-0 p-1 rounded",
-                                  isPinned
-                                    ? "hidden group-hover:block hover:bg-black/10 data-[state=open]:block data-[state=open]:bg-black/10"
-                                    : "opacity-0 group-hover:opacity-100 hover:bg-black/10 data-[state=open]:bg-black/10 data-[state=open]:opacity-100",
-                                  "transition-all"
-                                )}
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <MoreHorizontal className="size-3 text-muted-foreground/50" />
-                              </button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-36">
-                              <DropdownMenuItem
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleTogglePin(
-                                    project.id,
-                                    sess.sessionId,
-                                    isPinned
-                                  );
-                                }}
-                                className="gap-2"
-                              >
-                                <Pin className="size-3.5" />
-                                {isPinned ? "取消置顶" : "置顶"}
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openRenameDialog(
-                                    project.id,
-                                    sess.sessionId,
-                                    sess.title
-                                  );
-                                }}
-                                className="gap-2"
-                              >
-                                <Pencil className="size-3.5" />
-                                重命名
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteSession(
-                                    project.id,
-                                    sess.sessionId,
-                                    sess.title
-                                  );
-                                }}
-                                className="gap-2 text-destructive focus:text-destructive"
-                              >
-                                <Trash2 className="size-3.5" />
-                                删除
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          <SessionActionsMenu
+                            projectId={project.id}
+                            sessionId={sess.sessionId}
+                            title={sess.title}
+                            pinnedAt={sess.pinnedAt}
+                            sidebarMode
+                            isPinned={isPinned}
+                          />
                         </div>
                       );
                     })
@@ -497,29 +319,6 @@ export function ProjectTree({ onNewSession }: ProjectTreeProps) {
         );
       })}
 
-      {/* 重命名对话框 */}
-      <Dialog open={renameOpen} onOpenChange={setRenameOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>重命名对话</DialogTitle>
-          </DialogHeader>
-          <Input
-            value={renameValue}
-            onChange={(e) => setRenameValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleRename();
-            }}
-            placeholder="输入新名称"
-            autoFocus
-          />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRenameOpen(false)}>
-              取消
-            </Button>
-            <Button onClick={handleRename}>确认</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
