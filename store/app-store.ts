@@ -8,7 +8,6 @@ export interface Project {
   id: string;
   name: string;
   path: string;
-  description?: string | null;
   defaultModel?: string | null;
   userId: string;
   createdAt: number;

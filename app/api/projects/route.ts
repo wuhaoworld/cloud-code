@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { name, path, description, defaultModel } = body;
+  const { name, path, defaultModel } = body;
 
   if (!name || !path) {
     return NextResponse.json(
@@ -55,7 +55,6 @@ export async function POST(req: NextRequest) {
       id: uuidv4(),
       name,
       path,
-      description: description || null,
       defaultModel: defaultModel || "claude-opus-4-5",
       userId: session.user.id,
       createdAt: now,

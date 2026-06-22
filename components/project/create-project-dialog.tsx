@@ -14,7 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+
 import { useAppStore } from "@/store/app-store";
 
 interface CreateProjectDialogProps {
@@ -31,7 +31,6 @@ export function CreateProjectDialog({
   const [form, setForm] = useState({
     name: "",
     path: "",
-    description: "",
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -56,7 +55,7 @@ export function CreateProjectDialog({
       addProject(project);
       toast.success(`项目 "${project.name}" 创建成功`);
       onOpenChange(false);
-      setForm({ name: "", path: "", description: "" });
+      setForm({ name: "", path: "" });
     } catch {
       toast.error("网络错误，请重试");
     } finally {
@@ -102,18 +101,6 @@ export function CreateProjectDialog({
             <p className="text-xs text-muted-foreground">
               必须是服务器上有效的绝对路径
             </p>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label htmlFor="project-desc">项目描述（可选）</Label>
-            <Textarea
-              id="project-desc"
-              placeholder="简要描述此项目的用途..."
-              value={form.description}
-              onChange={(e) => setForm({ ...form, description: e.target.value })}
-              rows={3}
-              className="resize-none"
-            />
           </div>
 
           <DialogFooter className="mt-2">

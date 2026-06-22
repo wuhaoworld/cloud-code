@@ -136,7 +136,7 @@ export function ProjectTree({ onNewSession }: ProjectTreeProps) {
     setCurrentProject(project.id);
     setCurrentSession(null);
     clearMessages();
-    router.push(`/chat/${project.id}`);
+    router.push("/chat");
     onNewSession?.(project.id);
   };
 

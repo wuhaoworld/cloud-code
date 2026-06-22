@@ -9,7 +9,6 @@ export const projects = sqliteTable(
     id: text("id").primaryKey(), // UUID
     name: text("name").notNull(), // 项目显示名称
     path: text("path").notNull(), // 物理目录绝对路径
-    description: text("description"), // 项目描述
     defaultModel: text("default_model").default("claude-opus-4-5"), // 默认模型
     userId: text("user_id")
       .notNull()

@@ -17,13 +17,12 @@ export async function PUT(
 
   const { id } = await params;
   const body = await req.json();
-  const { name, description, defaultModel } = body;
+  const { name, defaultModel } = body;
 
   const [updated] = await db
     .update(projects)
     .set({
       ...(name && { name }),
-      ...(description !== undefined && { description }),
       ...(defaultModel && { defaultModel }),
       updatedAt: new Date(),
     })
