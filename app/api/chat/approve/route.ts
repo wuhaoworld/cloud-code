@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
-import { pendingPermissions } from "@/lib/pending-permissions";
+import {
+  addSessionPermissionUpdates,
+  createSessionPermissionUpdate,
+  pendingPermissions,
+} from "@/lib/pending-permissions";
 
 // POST /api/chat/approve — 用户审批挂起的权限请求
 export async function POST(req: NextRequest) {
@@ -33,13 +37,25 @@ export async function POST(req: NextRequest) {
 
   pendingPermissions.delete(requestId);
   clearTimeout(pending.timeout);
+  const fallbackPermissionUpdate = createSessionPermissionUpdate(
+    pending.toolName,
+    pending.input
+  );
+  const updatedPermissions =
+    action === "approve_permanent"
+      ? [
+          ...(pending.suggestions ?? []),
+          ...(fallbackPermissionUpdate ? [fallbackPermissionUpdate] : []),
+        ]
+      : undefined;
+
+  addSessionPermissionUpdates(pending.sessionPermissionKey, updatedPermissions);
   pending.resolve(
     action === "approve" || action === "approve_permanent"
       ? {
           behavior: "allow",
           updatedInput: pending.input,
-          updatedPermissions:
-            action === "approve_permanent" ? pending.suggestions : undefined,
+          updatedPermissions,
         }
       : { behavior: "deny", message: "Permission denied by user." }
   );

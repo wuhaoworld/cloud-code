@@ -114,10 +114,12 @@ export function ChatInput({
   const isStreaming = useAppStore((s) => s.isStreaming);
   const isActive = isStreaming;
 
-  const [model, setModel] = useState<string>(() => {
-    if (typeof window === "undefined") return "Mimo Pro v2.5";
-    return localStorage.getItem("selected-model") ?? "Mimo Pro v2.5";
-  });
+  const [model, setModel] = useState<string>("Mimo Pro v2.5");
+
+  useEffect(() => {
+    const stored = localStorage.getItem("selected-model");
+    if (stored) setModel(stored);
+  }, []);
   const [permissionMode, setPermissionMode] =
     useState<PermissionMode>("default");
 

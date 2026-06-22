@@ -7,7 +7,11 @@ import { eq, and } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import type { Block } from "@/store/types";
 import { isPermissionMode } from "@/lib/permission-mode";
-import { pendingPermissions, toPermissionResult } from "@/lib/pending-permissions";
+import {
+  getAllowedSessionPermissionUpdates,
+  pendingPermissions,
+  toPermissionResult,
+} from "@/lib/pending-permissions";
 import { validateProjectDirectory } from "@/lib/project-path";
 
 interface PendingMessage {
@@ -122,6 +126,9 @@ export async function POST(req: NextRequest) {
         // 思考开始时间
         let thinkingStartMs = 0;
 
+        const getSessionPermissionKey = () =>
+          `${session.user.id}:${projectId}:${newSessionId ?? sessionId ?? userMsgId}`;
+
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const queryOptions: any = {
           cwd: projectPath,
@@ -145,6 +152,25 @@ export async function POST(req: NextRequest) {
           ) => {
             const requestId = uuidv4();
             const toolUseID = options.toolUseID;
+            const sessionPermissionKey = getSessionPermissionKey();
+            const allowedUpdates = getAllowedSessionPermissionUpdates(
+              sessionPermissionKey,
+              toolName,
+              input
+            );
+
+            if (allowedUpdates?.length) {
+              return toPermissionResult(
+                {
+                  behavior: "allow",
+                  updatedInput: input,
+                  updatedPermissions: allowedUpdates,
+                },
+                toolUseID,
+                input
+              );
+            }
+
             emit("permission_request", {
               requestId,
               toolUseId: toolUseID,
@@ -192,6 +218,7 @@ export async function POST(req: NextRequest) {
                   toolName,
                   input,
                   toolUseID,
+                  sessionPermissionKey,
                   suggestions: options.suggestions,
                 });
               }
