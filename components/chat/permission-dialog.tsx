@@ -1,22 +1,14 @@
 "use client";
 
-import { AlertTriangle, Terminal, Check, X, Shield } from "lucide-react";
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogDescription,
-  AlertDialogFooter,
-} from "@/components/ui/alert-dialog";
+import { useEffect, useState } from "react";
+import { AlertTriangle, Check, CornerDownLeft, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { PermissionRequest } from "@/store/app-store";
 
 interface PermissionDialogProps {
   permission: PermissionRequest | null;
-  onApprove: (requestId: string) => void;
+  onApprove: (requestId: string, remember?: boolean) => void;
   onDeny: (requestId: string) => void;
 }
 
@@ -30,7 +22,20 @@ const DANGEROUS_PATTERNS = [
 
 function isDangerous(input: Record<string, unknown>): boolean {
   const command = String(input.command || "");
-  return DANGEROUS_PATTERNS.some((p) => p.test(command));
+  return DANGEROUS_PATTERNS.some((pattern) => pattern.test(command));
+}
+
+function getPermissionSummary(permission: PermissionRequest) {
+  const command = permission.input.command;
+  if (typeof command === "string" && command.trim()) {
+    return command.trim();
+  }
+
+  return JSON.stringify(permission.input, null, 2);
+}
+
+function getCommandPrefix(summary: string) {
+  return summary.trim().split(/\s+/)[0] || "该命令";
 }
 
 export function PermissionDialog({
@@ -38,99 +43,203 @@ export function PermissionDialog({
   onApprove,
   onDeny,
 }: PermissionDialogProps) {
+  const [selectedIndex, setSelectedIndex] = useState(0);
+
+  useEffect(() => {
+    if (!permission) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        setSelectedIndex((current) => (current + 1) % 3);
+        return;
+      }
+
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        setSelectedIndex((current) => (current + 2) % 3);
+        return;
+      }
+
+      if (event.key === "Enter") {
+        event.preventDefault();
+        if (selectedIndex === 0) onApprove(permission.requestId);
+        if (selectedIndex === 1) onApprove(permission.requestId, true);
+        if (selectedIndex === 2) onDeny(permission.requestId);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onApprove, onDeny, permission, selectedIndex]);
+
   if (!permission) return null;
 
   const dangerous = isDangerous(permission.input);
+  const summary = getPermissionSummary(permission);
+  const prefix = getCommandPrefix(summary);
+  const title = dangerous
+    ? "是否允许我运行一个高风险命令？"
+    : "是否允许我运行这个命令？";
 
   return (
-    <AlertDialog open={!!permission}>
-      <AlertDialogContent
-        className={cn(
-          "max-w-md",
-          dangerous && "border-red-500/50 shadow-red-500/10 shadow-xl"
-        )}
-      >
-        <AlertDialogHeader>
-          <AlertDialogTitle className="flex items-center gap-2">
-            {dangerous ? (
-              <AlertTriangle className="size-5 text-red-500" />
-            ) : (
-              <Shield className="size-5 text-amber-500" />
-            )}
-            <span className={dangerous ? "text-red-600" : ""}>
-              {dangerous ? "高危操作确认" : "工具权限请求"}
-            </span>
-            <Badge
-              variant={dangerous ? "destructive" : "secondary"}
-              className="ml-auto text-xs"
-            >
-              {permission.toolName}
-            </Badge>
-          </AlertDialogTitle>
-          <AlertDialogDescription>
-            AI Agent 请求执行以下操作，请确认是否允许：
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-
-        {/* 命令详情 */}
-        <div className="my-2 space-y-3">
-          {/* 工具类型 */}
-          <div className="flex items-center gap-2">
-            <Terminal className="size-3.5 text-muted-foreground shrink-0" />
-            <span className="text-xs text-muted-foreground">工具：</span>
-            <code className="text-xs font-mono bg-muted px-1.5 py-0.5 rounded">
-              {permission.toolName}
-            </code>
-          </div>
-
-          {/* 参数详情 */}
+    <section
+      aria-live="polite"
+      aria-label="权限请求"
+      className={cn(
+        "overflow-hidden rounded-[22px] border bg-background/98 shadow-[0_18px_60px_rgba(15,23,42,0.10)] backdrop-blur",
+        "dark:bg-[#161512]/98 dark:shadow-[0_18px_60px_rgba(0,0,0,0.36)]",
+        dangerous ? "border-red-500/35" : "border-border/80",
+      )}
+      id="permission-inline-card"
+    >
+      <div className="p-4">
+        <div className="flex items-start gap-3">
           <div
             className={cn(
-              "rounded-lg p-3 font-mono text-xs",
+              "mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full",
               dangerous
-                ? "bg-red-50 border border-red-200 text-red-800"
-                : "bg-muted/60 border border-border/60 text-foreground"
+                ? "bg-red-500/10 text-red-600 dark:text-red-400"
+                : "bg-amber-500/10 text-amber-600 dark:text-amber-400",
             )}
           >
-            <pre className="whitespace-pre-wrap break-all leading-relaxed">
-              {JSON.stringify(permission.input, null, 2)}
-            </pre>
+            {dangerous ? <AlertTriangle className="size-4" /> : <Shield className="size-4" />}
           </div>
-
-          {dangerous && (
-            <div className="flex items-start gap-2 p-2.5 bg-red-50 rounded-lg border border-red-200">
-              <AlertTriangle className="size-3.5 text-red-500 shrink-0 mt-0.5" />
-              <p className="text-xs text-red-700">
-                检测到高危命令！此操作可能对系统造成不可逆损害，请谨慎确认。
-              </p>
-            </div>
-          )}
+          <div className="min-w-0 flex-1">
+            <h2 className="text-[15px] font-semibold leading-6 text-foreground sm:text-base">
+              {title}
+            </h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              工具：<span className="font-mono">{permission.toolName}</span>
+            </p>
+          </div>
         </div>
 
-        <AlertDialogFooter className="gap-2">
-          <Button
-            variant="outline"
-            onClick={() => onDeny(permission.requestId)}
-            className="gap-2"
-            id="permission-deny-btn"
-          >
-            <X className="size-3.5" />
-            拒绝
-          </Button>
-          <Button
+        <pre
+          className={cn(
+            "mt-4 max-h-32 overflow-auto whitespace-pre-wrap break-words rounded-xl px-3 py-2.5 font-mono text-[13px] leading-6",
+            dangerous
+              ? "border border-red-500/20 bg-red-500/[0.06] text-red-700 dark:text-red-300"
+              : "bg-muted/55 text-muted-foreground",
+          )}
+        >
+          {summary}
+        </pre>
+
+        <div className="mt-3 space-y-1">
+          <button
+            type="button"
             onClick={() => onApprove(permission.requestId)}
+            onMouseEnter={() => setSelectedIndex(0)}
+            data-selected={selectedIndex === 0}
             className={cn(
-              "gap-2",
-              dangerous &&
-                "bg-red-600 hover:bg-red-700 text-white border-red-600"
+              "flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left text-sm transition-colors",
+              selectedIndex === 0
+                ? dangerous
+                  ? "bg-red-600 text-white"
+                  : "bg-muted text-foreground"
+                : dangerous
+                  ? "text-red-700 hover:bg-red-500/10 dark:text-red-300"
+                  : "text-foreground hover:bg-muted/70",
             )}
             id="permission-approve-btn"
           >
-            <Check className="size-3.5" />
-            {dangerous ? "确认执行（有风险）" : "批准"}
+            <span
+              className={cn(
+                "flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
+                selectedIndex === 0
+                  ? dangerous
+                    ? "bg-white text-red-600"
+                    : "bg-foreground text-background"
+                  : "border bg-background text-muted-foreground",
+              )}
+            >
+              1
+            </span>
+            <span className="font-semibold">是</span>
+            <Check className="ml-auto size-4 opacity-60" />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onApprove(permission.requestId, true)}
+            onMouseEnter={() => setSelectedIndex(1)}
+            data-selected={selectedIndex === 1}
+            className={cn(
+              "flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left text-sm transition-colors",
+              selectedIndex === 1
+                ? "bg-muted text-foreground"
+                : "text-foreground hover:bg-muted/70",
+            )}
+            id="permission-approve-prefix-btn"
+          >
+            <span
+              className={cn(
+                "flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-medium",
+                selectedIndex === 1
+                  ? "bg-foreground text-background"
+                  : "border bg-background text-muted-foreground",
+              )}
+            >
+              2
+            </span>
+            <span className="font-semibold">
+              是，且对于以后续内容开头的命令不再询问{" "}
+              <span className="font-mono text-muted-foreground">{prefix}</span>
+            </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onDeny(permission.requestId)}
+            onMouseEnter={() => setSelectedIndex(2)}
+            data-selected={selectedIndex === 2}
+            className={cn(
+              "flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left text-sm transition-colors",
+              selectedIndex === 2
+                ? "bg-muted text-foreground"
+                : "text-muted-foreground hover:bg-muted/70 hover:text-foreground",
+            )}
+            id="permission-deny-btn"
+          >
+            <span
+              className={cn(
+                "flex size-6 shrink-0 items-center justify-center rounded-full text-xs font-medium",
+                selectedIndex === 2
+                  ? "bg-foreground text-background"
+                  : "border bg-background text-muted-foreground",
+              )}
+            >
+              3
+            </span>
+            <span className="font-semibold">否</span>
+          </button>
+        </div>
+
+        <div className="mt-4 flex items-center justify-end gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => onDeny(permission.requestId)}
+            className="text-muted-foreground"
+          >
+            跳过
           </Button>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => onApprove(permission.requestId)}
+            className={cn(
+              "h-9 rounded-full px-4 text-sm font-semibold",
+              dangerous && "bg-red-600 text-white hover:bg-red-700",
+            )}
+          >
+            提交
+            <CornerDownLeft className="size-4" />
+          </Button>
+        </div>
+      </div>
+    </section>
   );
 }

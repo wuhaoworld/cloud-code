@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const { requestId, action } = body as {
     requestId: string;
-    action: "approve" | "deny";
+    action: "approve" | "approve_permanent" | "deny";
   };
 
   if (!requestId || !action) {
@@ -34,14 +34,18 @@ export async function POST(req: NextRequest) {
   pendingPermissions.delete(requestId);
   clearTimeout(pending.timeout);
   pending.resolve(
-    action === "approve"
+    action === "approve" || action === "approve_permanent"
       ? {
           behavior: "allow",
           updatedInput: pending.input,
-          updatedPermissions: pending.suggestions,
+          updatedPermissions:
+            action === "approve_permanent" ? pending.suggestions : undefined,
         }
       : { behavior: "deny", message: "Permission denied by user." }
   );
 
-  return NextResponse.json({ success: true, behavior: action === "approve" ? "allow" : "deny" });
+  return NextResponse.json({
+    success: true,
+    behavior: action === "deny" ? "deny" : "allow",
+  });
 }

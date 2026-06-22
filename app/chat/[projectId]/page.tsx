@@ -319,12 +319,15 @@ export function ChatArea({
     handleSend,
   ]);
 
-  const handleApprove = async (requestId: string) => {
+  const handleApprove = async (requestId: string, remember = false) => {
     try {
       await fetch("/api/chat/approve", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ requestId, action: "approve" }),
+        body: JSON.stringify({
+          requestId,
+          action: remember ? "approve_permanent" : "approve",
+        }),
       });
       setPendingPermission(null);
     } catch {
@@ -397,21 +400,23 @@ export function ChatArea({
       {/* 输入区域 */}
       <div className="shrink-0 border-t border-border/60 px-6 py-4">
         <div className="max-w-3xl mx-auto">
-          <ChatInput
-            onSend={handleSend}
-            onStop={handleStop}
-            disabled={!currentProject || isLoadingHistory}
-            projectId={projectId}
-          />
+          {pendingPermission ? (
+            <PermissionDialog
+              key={pendingPermission.requestId}
+              permission={pendingPermission}
+              onApprove={handleApprove}
+              onDeny={handleDeny}
+            />
+          ) : (
+            <ChatInput
+              onSend={handleSend}
+              onStop={handleStop}
+              disabled={!currentProject || isLoadingHistory}
+              projectId={projectId}
+            />
+          )}
         </div>
       </div>
-
-      {/* 权限审批弹窗 */}
-      <PermissionDialog
-        permission={pendingPermission}
-        onApprove={handleApprove}
-        onDeny={handleDeny}
-      />
     </div>
   );
 }
