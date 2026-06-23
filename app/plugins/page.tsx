@@ -21,9 +21,6 @@ export default async function PluginsPage() {
               插件
             </h1>
           </div>
-          <div className="rounded-full border border-black/10 bg-zinc-50 px-3 py-1 text-xs text-zinc-500">
-            {plugins.length} 个已安装 · {enabledPlugins.length} 个已启用
-          </div>
         </div>
       </header>
 

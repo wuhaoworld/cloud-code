@@ -62,7 +62,7 @@ export default async function PluginDetailPage({ params }: PluginDetailPageProps
           <div className="mb-5">
             <Link
               href="/plugins"
-              className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-sm text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 cursor-default"
             >
               <ChevronLeft className="size-4" />
               返回
