@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   FolderPlus,
-  Package,
+  LayoutGrid,
   Search,
   Settings,
   Sparkles,
@@ -70,8 +70,13 @@ export function AppSidebar() {
           <Search className="size-4 text-muted-foreground" />
           搜索
         </button>
-        <Link
-          href="/plugins"
+        <button
+          onClick={() => {
+            setCurrentProject(null);
+            setCurrentSession(null);
+            clearMessages();
+            router.push("/plugins");
+          }}
           className={cn(
             "w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md",
             "text-sm text-foreground hover:bg-[#EBEBED] transition-colors cursor-default",
@@ -79,9 +84,9 @@ export function AppSidebar() {
           )}
           id="sidebar-plugins-link"
         >
-          <Package className="size-4 text-muted-foreground" />
+          <LayoutGrid className="size-4 text-muted-foreground" />
           插件
-        </Link>
+        </button>
       </div>
 
       {/* 项目区 */}
