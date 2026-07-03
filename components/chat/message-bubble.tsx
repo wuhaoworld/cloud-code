@@ -245,7 +245,7 @@ function ThinkingBlockView({
 
   // 思考时长：完成后用服务端记录值，流式时用本地 elapsed
   const durationSec = block.durationSeconds !== undefined
-    ? Math.round(block.durationSeconds)
+    ? Math.max(1, Math.round(block.durationSeconds))
     : Math.max(1, elapsed);
 
   const label = isStreaming
