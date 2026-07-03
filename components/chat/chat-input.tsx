@@ -106,6 +106,7 @@ interface ModelOption {
   name: string;
   id: string;
 }
+const MODEL_FALLBACK: ModelOption = { name: "默认模型", id: "" };
 
 // ── Component ──────────────────────────────────────────────────────
 
@@ -142,9 +143,14 @@ export function ChatInput({
           setModel(found);
         } else if (list.length > 0) {
           setModel(list[0]);
+        } else {
+          setModel(MODEL_FALLBACK);
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        setModels([]);
+        setModel(MODEL_FALLBACK);
+      });
   }, []);
 
   const [permissionMode, setPermissionMode] =
@@ -599,7 +605,7 @@ export function ChatInput({
       attachments.length > 0 ? attachments : undefined,
       skillIds,
       permissionMode,
-      model.id,
+      model.id || undefined,
     );
 
     editor.innerHTML = "";
@@ -612,7 +618,7 @@ export function ChatInput({
     setAttachments([]);
 
     setTimeout(() => editor.focus(), 0);
-  }, [canSend, onSend, attachments, permissionMode]);
+  }, [canSend, onSend, attachments, permissionMode, model]);
 
   // ── Attachment: add ──
   const handleAddAttachment = () => {
@@ -838,19 +844,28 @@ export function ChatInput({
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="min-w-[120px] w-fit max-w-[320px] p-1 space-y-0.5">
-                  {models.map((m) => (
+                  {models.length === 0 ? (
                     <DropdownMenuItem
-                      key={m.id}
-                      onClick={() => handleModelChange(m)}
-                      className={cn(
-                        "flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg text-[13px] cursor-default whitespace-nowrap",
-                        m.id === model.id && "bg-accent"
-                      )}
+                      disabled
+                      className="px-3 py-1.5 rounded-lg text-[13px] text-muted-foreground"
                     >
-                      <span className="truncate">{m.name}</span>
-                      {m.id === model.id && <Check className="size-3.5 shrink-0" />}
+                      未检测到可选模型
                     </DropdownMenuItem>
-                  ))}
+                  ) : (
+                    models.map((m) => (
+                      <DropdownMenuItem
+                        key={m.id}
+                        onClick={() => handleModelChange(m)}
+                        className={cn(
+                          "flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg text-[13px] cursor-default whitespace-nowrap",
+                          m.id === model.id && "bg-accent"
+                        )}
+                      >
+                        <span className="truncate">{m.name}</span>
+                        {m.id === model.id && <Check className="size-3.5 shrink-0" />}
+                      </DropdownMenuItem>
+                    ))
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
 

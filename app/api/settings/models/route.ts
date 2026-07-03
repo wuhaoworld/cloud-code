@@ -16,16 +16,35 @@ export async function GET() {
     const env = settings.env ?? {};
 
     const models: ModelOption[] = [];
+    const seen = new Set<string>();
 
-    const pairs: [string, string][] = [
-      ["ANTHROPIC_DEFAULT_SONNET_MODEL_NAME", "ANTHROPIC_DEFAULT_SONNET_MODEL"],
-      ["ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME", "ANTHROPIC_DEFAULT_HAIKU_MODEL"],
-      ["ANTHROPIC_DEFAULT_OPUS_MODEL_NAME", "ANTHROPIC_DEFAULT_OPUS_MODEL"],
+    const definitions: Array<{
+      idKey: string;
+      nameKey?: string;
+    }> = [
+      {
+        idKey: "ANTHROPIC_DEFAULT_SONNET_MODEL",
+        nameKey: "ANTHROPIC_DEFAULT_SONNET_MODEL_NAME",
+      },
+      {
+        idKey: "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+        nameKey: "ANTHROPIC_DEFAULT_HAIKU_MODEL_NAME",
+      },
+      {
+        idKey: "ANTHROPIC_DEFAULT_OPUS_MODEL",
+        nameKey: "ANTHROPIC_DEFAULT_OPUS_MODEL_NAME",
+      },
+      {
+        idKey: "ANTHROPIC_MODEL",
+      },
     ];
 
-    for (const [nameKey, idKey] of pairs) {
-      const name = env[nameKey];
+    for (const { idKey, nameKey } of definitions) {
       const id = env[idKey];
+      if (!id || seen.has(id)) continue;
+
+      const name = nameKey ? env[nameKey] || id : id;
+      seen.add(id);
       if (name && id) {
         models.push({ name, id });
       }
