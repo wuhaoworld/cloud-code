@@ -2,6 +2,26 @@ import { sql } from "drizzle-orm";
 import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
 import { user } from "./auth-schema";
 
+// Workspace 表
+export const workspaces = sqliteTable(
+  "workspace",
+  {
+    id: text("id").primaryKey(), // UUID
+    name: text("name").notNull(), // 显示名称
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    createdAt: integer("created_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp_ms" })
+      .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [index("workspace_userId_idx").on(table.userId)]
+);
+
 // 项目表
 export const projects = sqliteTable(
   "project",
@@ -68,6 +88,8 @@ export const chatMessages = sqliteTable(
   (table) => [index("msg_sessionId_idx").on(table.sessionId)]
 );
 
+export type Workspace = typeof workspaces.$inferSelect;
+export type NewWorkspace = typeof workspaces.$inferInsert;
 export type Project = typeof projects.$inferSelect;
 export type NewProject = typeof projects.$inferInsert;
 export type ProjectSession = typeof projectSessions.$inferSelect;

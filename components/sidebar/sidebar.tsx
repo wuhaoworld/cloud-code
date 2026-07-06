@@ -9,12 +9,12 @@ import {
   LayoutGrid,
   Search,
   Settings,
-  Sparkles,
   MessageSquarePlus,
 } from "lucide-react";
 import { ProjectTree } from "@/components/sidebar/project-tree";
 import { SearchPanel } from "@/components/sidebar/search-panel";
 import { CreateProjectDialog } from "@/components/project/create-project-dialog";
+import { WorkspaceSwitcher } from "@/components/sidebar/workspace-switcher";
 import { useAppStore } from "@/store/app-store";
 
 export function AppSidebar() {
@@ -34,16 +34,9 @@ export function AppSidebar() {
 
   return (
     <aside className="flex flex-col h-full bg-sidebar border-r border-border/60 select-none">
-      {/* 顶部 Logo + 新对话 */}
+      {/* 顶部 Workspace 切换 */}
       <div className="flex items-center gap-2 px-4 pt-4 pb-2">
-        <div className="flex items-center gap-1.5 flex-1">
-          <div className="size-6 rounded-md bg-primary flex items-center justify-center">
-            <Sparkles className="size-3.5 text-primary-foreground" />
-          </div>
-          <span className="font-semibold text-sm tracking-tight">
-            Cloud Claude
-          </span>
-        </div>
+        <WorkspaceSwitcher />
       </div>
 
       {/* 快捷操作区 */}

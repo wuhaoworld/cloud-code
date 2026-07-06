@@ -2,6 +2,14 @@ import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import type { Message, Block, TextBlock, ThinkingBlock, ToolUseBlock, StreamEvent, MessageStatus } from "./types";
 
+export interface Workspace {
+  id: string;
+  name: string;
+  userId: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export type { Message, Block, TextBlock, ThinkingBlock, ToolUseBlock, StreamEvent, MessageStatus };
 
 export interface Project {
@@ -50,6 +58,9 @@ function patchLastBlock<T extends Block>(
 // ---- Store ----
 
 interface AppState {
+  workspaces: Workspace[];
+  currentWorkspaceId: string | null;
+
   projects: Project[];
   expandedProjects: Set<string>;
   currentProjectId: string | null;
@@ -64,6 +75,11 @@ interface AppState {
 
   sidebarWidth: number;
   rightPanelOpen: boolean;
+
+  // Actions — Workspace
+  setWorkspaces: (workspaces: Workspace[]) => void;
+  addWorkspace: (workspace: Workspace) => void;
+  setCurrentWorkspace: (workspaceId: string | null) => void;
 
   // Actions — 项目
   setProjects: (projects: Project[]) => void;
@@ -102,6 +118,9 @@ interface AppState {
 export const useAppStore = create<AppState>()(
   devtools(
     (set, get) => ({
+      workspaces: [],
+      currentWorkspaceId: null,
+
       projects: [],
       expandedProjects: new Set(),
       currentProjectId: null,
@@ -112,6 +131,17 @@ export const useAppStore = create<AppState>()(
       pendingPermission: null,
       sidebarWidth: 240,
       rightPanelOpen: false,
+
+      // Workspace actions
+      setWorkspaces: (workspaces) => set({ workspaces }),
+      addWorkspace: (workspace) =>
+        set((state) => ({ workspaces: [...state.workspaces, workspace] })),
+      setCurrentWorkspace: (workspaceId) => {
+        if (typeof window !== "undefined" && workspaceId) {
+          localStorage.setItem("current-workspace-id", workspaceId);
+        }
+        set({ currentWorkspaceId: workspaceId });
+      },
 
       // Project actions
       setProjects: (projects) => set({ projects }),
