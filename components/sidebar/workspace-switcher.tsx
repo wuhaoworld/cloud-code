@@ -88,14 +88,14 @@ export function WorkspaceSwitcher() {
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button className="flex items-center gap-1.5 flex-1 min-w-0 rounded-md hover:bg-[#EBEBED] px-1 py-0.5 -mx-1 transition-colors group">
+          <button className="flex items-center gap-1.5 flex-1 min-w-0 rounded-md hover:bg-[#EBEBED] px-2 py-2 -mx-2 transition-colors">
             <div className="size-6 shrink-0 rounded-md bg-primary flex items-center justify-center">
               <Sparkles className="size-3.5 text-primary-foreground" />
             </div>
             <span className="font-semibold text-sm tracking-tight truncate flex-1 text-left">
               {loading ? "Cloud Claude" : (current?.name ?? "Cloud Claude")}
             </span>
-            <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+            <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
           </button>
         </DropdownMenuTrigger>
 

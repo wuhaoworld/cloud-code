@@ -35,7 +35,7 @@ export function AppSidebar() {
   return (
     <aside className="flex flex-col h-full bg-sidebar border-r border-border/60 select-none">
       {/* 顶部 Workspace 切换 */}
-      <div className="flex items-center gap-2 px-4 pt-4 pb-2">
+      <div className="flex items-center gap-2 px-4 pt-2 pb-1">
         <WorkspaceSwitcher />
       </div>
 
