@@ -1,4 +1,4 @@
-# Cloud Claude AI Agent Web 系统需求规格说明书 (PRD)
+# Cloud Code AI Agent Web 系统需求规格说明书 (PRD)
 
 本文件详细规划了基于 **Cloud Agent SDK (TypeScript)** 的 AI Agent 系统网页应用的设计与开发细节。系统致力于在网页端提供类似于 Claude Code 的高度智能、实时流式响应、具备工程级代码读写与调试能力的 AI 辅助编程环境。
 
@@ -7,7 +7,7 @@
 ## 1. 项目概述
 
 ### 1.1 项目名称与定位
-* **项目名称**：Cloud Claude AI Agent Web
+* **项目名称**：Cloud Code AI Agent Web
 * **系统定位**：一个私有部署/多租户的网页版 Claude Code，让开发者能够通过美观的网页界面管理项目、与 AI 代理进行深度辅助编程对话、解释和调试代码，并借助 SDK 提供的底层能力直接对本地项目代码进行智能重构与版本跟踪。
 
 ### 1.2 技术栈与核心依赖

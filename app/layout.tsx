@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/sonner";
 
 export const metadata: Metadata = {
-  title: "Cloud Claude",
+  title: "Cloud Code",
   description: "AI-powered cloud workspace",
 };
 

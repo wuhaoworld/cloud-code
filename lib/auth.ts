@@ -5,7 +5,7 @@ import { db } from "@/db";
 import * as schema from "@/db/auth-schema";
 
 export const auth = betterAuth({
-    appName: "Cloud Claude",
+    appName: "Cloud Code",
     emailAndPassword: {
         enabled: true,
         minPasswordLength: 8,

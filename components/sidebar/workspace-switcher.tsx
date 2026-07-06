@@ -93,7 +93,7 @@ export function WorkspaceSwitcher() {
               <Sparkles className="size-3.5 text-primary-foreground" />
             </div>
             <span className="font-semibold text-sm tracking-tight truncate flex-1 text-left">
-              {loading ? "Cloud Claude" : (current?.name ?? "Cloud Claude")}
+              {loading ? "Cloud Code" : (current?.name ?? "Cloud Code")}
             </span>
             <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
           </button>
