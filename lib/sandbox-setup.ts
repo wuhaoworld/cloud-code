@@ -148,12 +148,16 @@ async function installDepsWithIntegrityCheck(sandbox: SandboxInstance): Promise<
  */
 async function verifyClaudeBinary(sandbox: SandboxInstance): Promise<boolean> {
   const binPath = `${SERVER_DIR}/node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude`;
-  const result = await sandbox.runCommand({
-    cmd: "sh",
-    args: ["-c", `[ -x "${binPath}" ] && "${binPath}" --version`],
-    cwd: SERVER_DIR,
-  });
-  return result.exitCode === 0;
+  try {
+    const result = await sandbox.runCommand({
+      cmd: "sh",
+      args: ["-c", `[ -x "${binPath}" ] && "${binPath}" --version`],
+      cwd: SERVER_DIR,
+    });
+    return result.exitCode === 0;
+  } catch {
+    return false;
+  }
 }
 
 /**
