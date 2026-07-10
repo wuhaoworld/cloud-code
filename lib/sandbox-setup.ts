@@ -136,6 +136,17 @@ async function installDepsWithIntegrityCheck(sandbox: SandboxInstance): Promise<
       );
     }
 
+    // Make claude available globally so it can be found via `which claude`.
+    // Prefer ~/.local/bin (user-owned, always in PATH on Vercel Sandbox VMs).
+    // Fall back to /usr/local/bin if needed.
+    await sandbox.runCommand({
+      cmd: "sh",
+      args: [
+        "-c",
+        `mkdir -p ~/.local/bin && ln -sf ${SERVER_DIR}/node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude ~/.local/bin/claude`,
+      ],
+    });
+
     return;
   }
 }
