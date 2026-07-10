@@ -19,6 +19,22 @@ function getCredentials() {
   return {};
 }
 
+// Vercel Sandbox's own default lifetime is 5 minutes, which is too short:
+// bootstrapping the in-sandbox server alone (npm install of the ~250MB
+// claude native binary) can take 1-3 minutes, leaving almost no time for the
+// first chat turn before the VM is auto-stopped. Start it with more
+// breathing room; the heartbeat below keeps extending it during real usage.
+const INITIAL_TIMEOUT_MS = 20 * 60 * 1000; // 20 minutes
+// How often the heartbeat checks in and (if the workspace is still active)
+// extends the sandbox's timeout.
+const HEARTBEAT_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
+// How much to extend the timeout by on each heartbeat tick.
+const HEARTBEAT_EXTEND_MS = 20 * 60 * 1000; // 20 minutes
+// Stop renewing (and let Vercel's own timeout stop the VM) once the
+// workspace has had no activity for this long, so unused sandboxes don't
+// run — and bill — forever.
+const IDLE_RENEWAL_CUTOFF_MS = 15 * 60 * 1000; // 15 minutes
+
 // In-process cache: workspaceId → running Sandbox instance
 // NOTE: This is per-process memory. In multi-instance deployments the sandbox
 // must be looked up from DB (sandboxId) and reconnected via Sandbox.connect().
@@ -35,12 +51,65 @@ const serverUrls = new Map<string, string>();
 // native binary write.
 const bootstrapPromises = new Map<string, Promise<string>>();
 
+// workspaceId → timestamp of last observed activity (chat request, etc).
+const lastActivity = new Map<string, number>();
+
+// workspaceId → heartbeat interval handle that periodically extends the
+// sandbox's timeout while the workspace is actively in use.
+const heartbeats = new Map<string, ReturnType<typeof setInterval>>();
+
+function touchActivity(workspaceId: string) {
+  lastActivity.set(workspaceId, Date.now());
+}
+
+function stopHeartbeat(workspaceId: string) {
+  const handle = heartbeats.get(workspaceId);
+  if (handle) {
+    clearInterval(handle);
+    heartbeats.delete(workspaceId);
+  }
+}
+
+/**
+ * Keep extending the sandbox's timeout on a fixed interval as long as the
+ * workspace has had recent activity. Once activity goes stale (the user
+ * stopped chatting), we stop renewing so the sandbox naturally auto-stops
+ * per Vercel's own timeout instead of running indefinitely.
+ */
+function startHeartbeat(
+  workspaceId: string,
+  sandbox: InstanceType<typeof import("@vercel/sandbox").Sandbox>
+) {
+  stopHeartbeat(workspaceId);
+  const handle = setInterval(async () => {
+    const last = lastActivity.get(workspaceId) ?? 0;
+    if (Date.now() - last > IDLE_RENEWAL_CUTOFF_MS) {
+      // No recent activity — stop renewing and let it expire naturally.
+      stopHeartbeat(workspaceId);
+      return;
+    }
+    try {
+      await sandbox.extendTimeout(HEARTBEAT_EXTEND_MS);
+    } catch {
+      // Sandbox is likely already gone (stopped/deleted) — clean up local
+      // state so the next request falls through to recreate/reconnect
+      // instead of reusing a dead reference.
+      stopHeartbeat(workspaceId);
+      runningInstances.delete(workspaceId);
+      serverUrls.delete(workspaceId);
+    }
+  }, HEARTBEAT_INTERVAL_MS);
+  heartbeats.set(workspaceId, handle);
+}
+
 export class SandboxManager {
   /**
    * Return a running Sandbox for the workspace, creating one if needed.
    * Restores from snapshot when available.
    */
   static async getOrCreate(workspaceId: string) {
+    touchActivity(workspaceId);
+
     // Return cached in-process instance if still live
     const cached = runningInstances.get(workspaceId);
     if (cached) return cached;
@@ -63,7 +132,11 @@ export class SandboxManager {
     if (workspace.sandboxStatus === "running" && workspace.sandboxId) {
       try {
         sandbox = await Sandbox.get({ name: workspace.sandboxId, ...credentials });
+        // Extend immediately on reconnect in case it's close to expiring,
+        // then keep it alive for as long as the workspace stays active.
+        await sandbox.extendTimeout(INITIAL_TIMEOUT_MS).catch(() => {});
         runningInstances.set(workspaceId, sandbox);
+        startHeartbeat(workspaceId, sandbox);
         return sandbox;
       } catch {
         // Sandbox is gone (timed out, deleted) — fall through to create a new one
@@ -83,19 +156,20 @@ export class SandboxManager {
       sandbox = await Sandbox.create({
         ...credentials,
         source: { type: "snapshot", snapshotId: workspace.sandboxSnapshotId },
-        timeout: 300_000,
+        timeout: INITIAL_TIMEOUT_MS,
         ports: [3001],
       });
     } else {
       sandbox = await Sandbox.create({
         ...credentials,
         runtime: "node24",
-        timeout: 300_000,
+        timeout: INITIAL_TIMEOUT_MS,
         ports: [3001],
       });
     }
 
     runningInstances.set(workspaceId, sandbox);
+    startHeartbeat(workspaceId, sandbox);
 
     await db
       .update(workspaces)
@@ -169,6 +243,8 @@ export class SandboxManager {
     const sandbox = runningInstances.get(workspaceId);
     if (!sandbox) return;
 
+    stopHeartbeat(workspaceId);
+    lastActivity.delete(workspaceId);
     runningInstances.delete(workspaceId);
     serverUrls.delete(workspaceId);
     bootstrapPromises.delete(workspaceId);
@@ -182,5 +258,19 @@ export class SandboxManager {
 
   static getRunningInstance(workspaceId: string) {
     return runningInstances.get(workspaceId) ?? null;
+  }
+
+  /**
+   * Drop cached local state for a workspace's sandbox without calling
+   * sandbox.stop(). Used when a request discovers the cached instance is
+   * actually dead server-side (e.g. a 410 from the sandbox's HTTP server),
+   * so the next getOrCreate() call reconnects/recreates instead of reusing
+   * a stale reference.
+   */
+  static invalidate(workspaceId: string) {
+    stopHeartbeat(workspaceId);
+    runningInstances.delete(workspaceId);
+    serverUrls.delete(workspaceId);
+    bootstrapPromises.delete(workspaceId);
   }
 }

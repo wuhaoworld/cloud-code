@@ -193,22 +193,58 @@ export async function POST(req: NextRequest) {
             origEmit(eventType, data);
           };
 
-          const { sessionId: finalSessionId, assistantBlocks } = await sandboxStreamProxy(
-            {
-              sandboxBaseUrl,
-              projectId,
-              prompt,
-              cwd: sandboxCwd,
-              sessionId,
-              model,
-              permissionMode,
-              userMsgId,
-              assistantMsgId,
-              workspaceId: project.workspaceId!,
-            },
-            wrappedEmit,
-            req.signal
-          );
+          let sandboxResult: { sessionId: string | undefined; assistantBlocks: Block[] };
+          try {
+            sandboxResult = await sandboxStreamProxy(
+              {
+                sandboxBaseUrl,
+                projectId,
+                prompt,
+                cwd: sandboxCwd,
+                sessionId,
+                model,
+                permissionMode,
+                userMsgId,
+                assistantMsgId,
+                workspaceId: project.workspaceId!,
+              },
+              wrappedEmit,
+              req.signal
+            );
+          } catch (err) {
+            // The sandbox may have been auto-stopped (Vercel returns 410 once
+            // its timeout elapses). Drop the stale cached reference and retry
+            // once against a freshly reconnected/recreated sandbox instead of
+            // surfacing the error straight to the user.
+            const message = err instanceof Error ? err.message : "";
+            const isStaleSandbox = message.includes("Sandbox server error 410");
+            if (!isStaleSandbox) throw err;
+
+            SandboxManager.invalidate(project.workspaceId!);
+            await SandboxManager.getOrCreate(project.workspaceId!);
+            const freshInstance = SandboxManager.getRunningInstance(project.workspaceId!);
+            if (!freshInstance) throw err;
+
+            const freshBaseUrl = await SandboxManager.ensureServerRunning(project.workspaceId!, freshInstance);
+            sandboxResult = await sandboxStreamProxy(
+              {
+                sandboxBaseUrl: freshBaseUrl,
+                projectId,
+                prompt,
+                cwd: sandboxCwd,
+                sessionId,
+                model,
+                permissionMode,
+                userMsgId,
+                assistantMsgId,
+                workspaceId: project.workspaceId!,
+              },
+              wrappedEmit,
+              req.signal
+            );
+          }
+
+          const { sessionId: finalSessionId, assistantBlocks } = sandboxResult;
 
           // Persist messages
           const resolvedSessionId = finalSessionId ?? newSessionId;
