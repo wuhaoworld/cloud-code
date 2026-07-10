@@ -1,4 +1,4 @@
-import { bootstrapSandboxServer } from "./sandbox-setup";
+import { bootstrapSandboxServer, restartServerIfStopped } from "./sandbox-setup";
 import { db } from "@/db";
 import { workspaces } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -105,7 +105,12 @@ function startHeartbeat(
 export class SandboxManager {
   /**
    * Return a running Sandbox for the workspace, creating one if needed.
-   * Restores from snapshot when available.
+   *
+   * Uses the SDK's `Sandbox.getOrCreate` which leverages persistent sandboxes:
+   * - First call → creates a fresh sandbox, runs `onCreate` (full bootstrap)
+   * - Subsequent calls → resumes from the latest auto-snapshot, runs `onResume`
+   * - After timeout → Vercel auto-snapshots (persistent: true), next call
+   *   resumes from that snapshot with node_modules intact — no reinstall needed
    */
   static async getOrCreate(workspaceId: string) {
     touchActivity(workspaceId);
@@ -125,48 +130,32 @@ export class SandboxManager {
     const Sandbox = await getSandboxClass();
     const credentials = getCredentials();
 
-    let sandbox: InstanceType<typeof Sandbox>;
-
-    // If DB says there's already a running sandbox (e.g. process restarted / hot-reload),
-    // try to reconnect to it by name instead of creating a new one.
-    if (workspace.sandboxStatus === "running" && workspace.sandboxId) {
-      try {
-        sandbox = await Sandbox.get({ name: workspace.sandboxId, ...credentials });
-        // Extend immediately on reconnect in case it's close to expiring,
-        // then keep it alive for as long as the workspace stays active.
-        await sandbox.extendTimeout(INITIAL_TIMEOUT_MS).catch(() => {});
-        runningInstances.set(workspaceId, sandbox);
-        startHeartbeat(workspaceId, sandbox);
-        return sandbox;
-      } catch {
-        // Sandbox is gone (timed out, deleted) — fall through to create a new one
-        await db
-          .update(workspaces)
-          .set({ sandboxId: null, sandboxStatus: "idle" })
-          .where(eq(workspaces.id, workspaceId));
-      }
-    }
-
     await db
       .update(workspaces)
       .set({ sandboxStatus: "starting" })
       .where(eq(workspaces.id, workspaceId));
 
-    if (workspace.sandboxSnapshotId) {
-      sandbox = await Sandbox.create({
-        ...credentials,
-        source: { type: "snapshot", snapshotId: workspace.sandboxSnapshotId },
-        timeout: INITIAL_TIMEOUT_MS,
-        ports: [3001],
-      });
-    } else {
-      sandbox = await Sandbox.create({
-        ...credentials,
-        runtime: "node24",
-        timeout: INITIAL_TIMEOUT_MS,
-        ports: [3001],
-      });
-    }
+    // Use SDK's getOrCreate — handles both fresh creation and resume from snapshot.
+    // persistent: true (default) means Vercel auto-snapshots on timeout,
+    // and the sandbox resumes from the latest snapshot automatically.
+    // keepLastSnapshots: { count: 1 } keeps storage costs flat.
+    const sandbox = await Sandbox.getOrCreate({
+      name: workspace.sandboxId ?? undefined,
+      ...credentials,
+      runtime: "node24",
+      timeout: INITIAL_TIMEOUT_MS,
+      ports: [3001],
+      keepLastSnapshots: { count: 1 },
+      onCreate: async (sbx) => {
+        // First time: full bootstrap (upload server, npm install, start server)
+        await bootstrapSandboxServer(sbx);
+      },
+      onResume: async (sbx) => {
+        // Resumed from snapshot: server process is dead but node_modules
+        // are intact. Only restart the server if it's not already responding.
+        await restartServerIfStopped(sbx);
+      },
+    });
 
     runningInstances.set(workspaceId, sandbox);
     startHeartbeat(workspaceId, sandbox);
@@ -189,7 +178,18 @@ export class SandboxManager {
     sandbox: InstanceType<typeof import("@vercel/sandbox").Sandbox>
   ): Promise<string> {
     const cached = serverUrls.get(workspaceId);
-    if (cached) return cached;
+    if (cached) {
+      // Verify the cached server is still alive — after a sandbox
+      // timeout + snapshot restore, the process is dead even though
+      // we have a cached URL from before the timeout.
+      try {
+        const res = await fetch(`${cached}/health`, { signal: AbortSignal.timeout(3_000) });
+        if (res.ok) return cached;
+      } catch {
+        // Server is dead — fall through to re-bootstrap
+      }
+      serverUrls.delete(workspaceId);
+    }
 
     // Deduplicate concurrent bootstrap calls for the same workspace so only
     // one `npm install` ever runs against the sandbox at a time.
@@ -211,6 +211,10 @@ export class SandboxManager {
 
   /**
    * Take a filesystem snapshot so state survives sandbox shutdown.
+   *
+   * NOTE: sandbox.snapshot() stops the VM as a side effect. We clean up
+   * in-memory state and set status to "idle" so the next getOrCreate() call
+   * properly resumes from this snapshot.
    */
   static async checkpoint(workspaceId: string) {
     const sandbox = runningInstances.get(workspaceId);
@@ -223,9 +227,14 @@ export class SandboxManager {
 
     try {
       const snap = await sandbox.snapshot();
+      // snapshot() stops the sandbox — clean up stale in-memory references
+      stopHeartbeat(workspaceId);
+      runningInstances.delete(workspaceId);
+      serverUrls.delete(workspaceId);
+      bootstrapPromises.delete(workspaceId);
       await db
         .update(workspaces)
-        .set({ sandboxSnapshotId: snap.snapshotId, sandboxStatus: "running" })
+        .set({ sandboxSnapshotId: snap.snapshotId, sandboxStatus: "idle" })
         .where(eq(workspaces.id, workspaceId));
     } catch (err) {
       await db

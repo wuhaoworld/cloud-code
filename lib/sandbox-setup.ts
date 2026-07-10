@@ -200,6 +200,25 @@ async function bundleWithEsbuild(): Promise<Buffer> {
   return Buffer.from(result.outputFiles[0].contents);
 }
 
+/**
+ * Restart the in-sandbox server if it's not already running.
+ * Checks /health first — skips the full bootstrap if the server is already alive.
+ * Used in the onResume callback after a sandbox is restored from snapshot.
+ */
+export async function restartServerIfStopped(sandbox: SandboxInstance): Promise<string> {
+  const baseUrl = sandbox.domain(SERVER_PORT);
+
+  // Quick health check — if the server survived the resume, skip bootstrap
+  try {
+    const res = await fetch(`${baseUrl}/health`, { signal: AbortSignal.timeout(3_000) });
+    if (res.ok) return baseUrl;
+  } catch {
+    // Not running, proceed with bootstrap
+  }
+
+  return bootstrapSandboxServer(sandbox);
+}
+
 async function waitForHealth(healthUrl: string): Promise<void> {
   const deadline = Date.now() + HEALTH_TIMEOUT_MS;
   while (Date.now() < deadline) {
