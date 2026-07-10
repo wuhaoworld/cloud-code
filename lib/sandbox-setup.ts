@@ -64,18 +64,43 @@ export async function bootstrapSandboxServer(sandbox: SandboxInstance): Promise<
  * wipe node_modules and retry once — this recovers from a half-written
  * binary left over by a previous interrupted install (timeout, concurrent
  * bootstrap calls, sandbox reclaim mid-write, etc.).
+ *
+ * NOTE: We only do a local `npm install` — no global `npm install -g`.
+ * The global CLI pulls in platform-specific optional deps that may resolve
+ * to the wrong libc variant (e.g. musl on a glibc host), causing a
+ * confusing "binary exists but failed to launch" error. The local
+ * `@anthropic-ai/claude-agent-sdk` package auto-resolves the correct
+ * binary for the current platform from its own optional dependencies.
  */
 async function installDepsWithIntegrityCheck(sandbox: SandboxInstance): Promise<void> {
   for (let attempt = 1; attempt <= MAX_INSTALL_ATTEMPTS; attempt++) {
-    // Stream npm's output to the server process's own stdout/stderr as it
-    // happens, instead of only inspecting it after a failure. The claude
-    // native binary is ~250MB, so this install can take a while — live
-    // output makes it possible to tell (from server logs) whether an
-    // in-progress install is still making progress or has actually stalled,
-    // rather than staring at a black box until the timeout fires.
+    // When resuming from a snapshot, node_modules may already exist with a
+    // valid or corrupted binary. Check first — skip the full install if the
+    // binary already works, saving significant time on warm resumes.
+    const alreadyWorking = await verifyClaudeBinary(sandbox);
+    if (alreadyWorking) {
+      process.stdout.write("[sandbox] claude binary already functional, skipping npm install\n");
+      return;
+    }
+
+    // Binary is missing or broken — do a clean install.
+    // If this is a retry (attempt > 1), node_modules was already wiped by
+    // cleanNodeModules() below. On first attempt, npm install is a no-op if
+    // packages are already present, so force a clean slate to ensure the
+    // platform-specific binary gets re-downloaded.
+    if (attempt > 1 || !(await hasNodeModules(sandbox))) {
+      // First attempt with no node_modules — normal install
+    } else {
+      // node_modules exists but binary is broken — clean and reinstall
+      await cleanNodeModules(sandbox);
+    }
+
+    // Install all deps (express, uuid, claude-agent-sdk + its platform binary)
+    // from the local package.json. Stream npm's output so in-progress installs
+    // are visible in server logs.
     const install = await sandbox.runCommand({
       cmd: "npm",
-      args: ['install', '-g', '@anthropic-ai/claude-code'],
+      args: ["install"],
       cwd: SERVER_DIR,
       timeoutMs: NPM_INSTALL_TIMEOUT_MS,
       stdout: prefixedLogStream(process.stdout, "[sandbox npm install] "),
@@ -93,13 +118,12 @@ async function installDepsWithIntegrityCheck(sandbox: SandboxInstance): Promise<
 
     // Safety net: some npm/tar extraction paths (e.g. certain registries or
     // proxies) don't preserve the executable bit on large native binaries.
-    // Force +x on the claude binary so a stripped exec bit doesn't surface as a
-    // confusing "binary exists but failed to launch" / libc-mismatch error.
+    // Force +x on the SDK's bundled claude binary.
     await sandbox.runCommand({
       cmd: "sh",
       args: [
         "-c",
-        `chmod +x $(which claude 2>/dev/null) 2>/dev/null || true`,
+        `chmod +x ${SERVER_DIR}/node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude 2>/dev/null || true`,
       ],
       cwd: SERVER_DIR,
     });
@@ -117,43 +141,22 @@ async function installDepsWithIntegrityCheck(sandbox: SandboxInstance): Promise<
       );
     }
 
-    // Install sandbox server's own dependencies (express, uuid, claude-agent-sdk)
-    // from the local package.json. The global install above only provides the
-    // `claude` CLI binary — it does NOT install the SDK that the server requires
-    // at runtime (marked external by esbuild).
-    const localInstall = await sandbox.runCommand({
-      cmd: "npm",
-      args: ["install"],
-      cwd: SERVER_DIR,
-      timeoutMs: NPM_INSTALL_TIMEOUT_MS,
-      stdout: prefixedLogStream(process.stdout, "[sandbox npm install-local] "),
-      stderr: prefixedLogStream(process.stderr, "[sandbox npm install-local] "),
-    });
-
-    if (localInstall.exitCode !== 0) {
-      const stderr = await localInstall.stderr().catch(() => "");
-      throw new Error(
-        `npm install (local deps) failed in sandbox (exit ${localInstall.exitCode}): ${stderr.slice(-2000)}`
-      );
-    }
-
     return;
   }
 }
 
 /**
  * Verify the claude native binary can actually execute, by running
- * `claude --version`. Returns false if the binary is missing, not
- * executable, or crashes on launch (e.g. truncated file).
+ * `claude --version` against the SDK's locally installed binary.
+ * Returns false if the binary is missing, not executable, or crashes
+ * on launch (e.g. truncated file, libc mismatch).
  */
 async function verifyClaudeBinary(sandbox: SandboxInstance): Promise<boolean> {
+  const binPath = `${SERVER_DIR}/node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude`;
   const result = await sandbox.runCommand({
     cmd: "sh",
-    args: [
-      "-c",
-      `bin=$(which claude 2>/dev/null); ` +
-        `[ -n "$bin" ] && "$bin" --version >/dev/null 2>&1`,
-    ],
+    args: ["-c", `[ -x "${binPath}" ] && "${binPath}" --version`],
+    cwd: SERVER_DIR,
   });
   return result.exitCode === 0;
 }
@@ -173,16 +176,18 @@ function prefixedLogStream(target: NodeJS.WritableStream, prefix: string): Writa
   });
 }
 
+async function hasNodeModules(sandbox: SandboxInstance): Promise<boolean> {
+  const result = await sandbox.runCommand({
+    cmd: "sh",
+    args: ["-c", `[ -d "${SERVER_DIR}/node_modules" ]`],
+  });
+  return result.exitCode === 0;
+}
+
 async function cleanNodeModules(sandbox: SandboxInstance): Promise<void> {
   await sandbox.runCommand({
     cmd: "rm",
     args: ["-rf", `${SERVER_DIR}/node_modules`, `${SERVER_DIR}/package-lock.json`],
-  });
-  // Also uninstall the globally installed claude CLI so a corrupted binary
-  // doesn't persist across reinstall attempts.
-  await sandbox.runCommand({
-    cmd: "npm",
-    args: ["uninstall", "-g", "@anthropic-ai/claude-code"],
   });
 }
 
