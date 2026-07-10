@@ -143,6 +143,7 @@ export class SandboxManager {
       name: workspace.sandboxId ?? undefined,
       ...credentials,
       runtime: "node24",
+      resources: { vcpus: 4 },
       timeout: INITIAL_TIMEOUT_MS,
       ports: [3001],
       keepLastSnapshots: { count: 1 },
