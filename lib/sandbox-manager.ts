@@ -45,15 +45,31 @@ export class SandboxManager {
 
     if (!workspace) throw new Error(`Workspace ${workspaceId} not found`);
 
-    await db
-      .update(workspaces)
-      .set({ sandboxStatus: "starting" })
-      .where(eq(workspaces.id, workspaceId));
-
     const Sandbox = await getSandboxClass();
     const credentials = getCredentials();
 
     let sandbox: InstanceType<typeof Sandbox>;
+
+    // If DB says there's already a running sandbox (e.g. process restarted / hot-reload),
+    // try to reconnect to it by name instead of creating a new one.
+    if (workspace.sandboxStatus === "running" && workspace.sandboxId) {
+      try {
+        sandbox = await Sandbox.get({ name: workspace.sandboxId, ...credentials });
+        runningInstances.set(workspaceId, sandbox);
+        return sandbox;
+      } catch {
+        // Sandbox is gone (timed out, deleted) — fall through to create a new one
+        await db
+          .update(workspaces)
+          .set({ sandboxId: null, sandboxStatus: "idle" })
+          .where(eq(workspaces.id, workspaceId));
+      }
+    }
+
+    await db
+      .update(workspaces)
+      .set({ sandboxStatus: "starting" })
+      .where(eq(workspaces.id, workspaceId));
 
     if (workspace.sandboxSnapshotId) {
       sandbox = await Sandbox.create({

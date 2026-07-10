@@ -55,8 +55,7 @@ async function uploadServerBundle(sandbox: SandboxInstance): Promise<void> {
   // outputs to lib/sandbox-server/dist/index.js.
   const possiblePaths = [
     path.join(process.cwd(), "lib/sandbox-server/dist/index.js"),
-    path.join(__dirname, "dist/index.js"),
-    path.join(__dirname, "index.js"), // fallback: same dir if already compiled
+    path.join(process.cwd(), ".next/server/lib/sandbox-server/index.js"),
   ];
 
   let source: Buffer | null = null;
@@ -95,7 +94,8 @@ async function bundleWithEsbuild(): Promise<Buffer> {
   // Dynamic import so esbuild is only needed at bootstrap time
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const esbuild = require("esbuild");
-  const entryPoint = path.join(__dirname, "index.ts");
+  // __dirname is a virtual path in Next.js compiled code; use process.cwd() instead
+  const entryPoint = path.join(process.cwd(), "lib/sandbox-server/index.ts");
   const result = await esbuild.build({
     entryPoints: [entryPoint],
     bundle: true,

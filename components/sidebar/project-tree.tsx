@@ -44,6 +44,7 @@ export function ProjectTree({ onNewSession }: ProjectTreeProps) {
     expandedProjects,
     currentProjectId,
     currentSessionId,
+    currentWorkspaceId,
     setProjects,
     setSessions,
     removeProject,
@@ -72,7 +73,10 @@ export function ProjectTree({ onNewSession }: ProjectTreeProps) {
   // 加载项目列表
   const loadProjects = useCallback(async () => {
     try {
-      const res = await fetch("/api/projects");
+      const url = currentWorkspaceId
+        ? `/api/projects?workspaceId=${currentWorkspaceId}`
+        : "/api/projects";
+      const res = await fetch(url);
       if (!res.ok) return;
       const data = await res.json();
       setProjects(data);
@@ -119,7 +123,7 @@ export function ProjectTree({ onNewSession }: ProjectTreeProps) {
     } catch {
       /* ignore */
     }
-  }, [setProjects, setExpandedProjects, loadSessions]);
+  }, [setProjects, setExpandedProjects, loadSessions, currentWorkspaceId]);
 
   useEffect(() => {
     loadProjects();

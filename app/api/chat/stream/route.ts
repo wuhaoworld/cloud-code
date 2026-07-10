@@ -80,10 +80,10 @@ export async function POST(req: NextRequest) {
       .limit(1);
 
     if (workspace) {
-      // Auto-start if idle; wait if already starting
-      if (workspace.sandboxStatus === "idle" || workspace.sandboxStatus === "starting") {
-        await SandboxManager.getOrCreate(project.workspaceId);
-      }
+      // Always call getOrCreate — it returns the cached instance if already running,
+      // and re-connects (or creates fresh) if the process was restarted and the
+      // in-memory map is empty (e.g. dev hot-reload, multi-instance, etc.)
+      await SandboxManager.getOrCreate(project.workspaceId);
 
       const sandboxInstance = SandboxManager.getRunningInstance(project.workspaceId);
       if (sandboxInstance) {

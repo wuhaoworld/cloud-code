@@ -8,17 +8,24 @@ import { v4 as uuidv4 } from "uuid";
 import { validateProjectDirectory } from "@/lib/project-path";
 import { SandboxManager } from "@/lib/sandbox-manager";
 
-// GET /api/projects — 获取当前用户所有项目
-export async function GET() {
+// GET /api/projects?workspaceId=xxx — 获取当前用户的项目（可按 workspace 过滤）
+export async function GET(req: NextRequest) {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const { searchParams } = new URL(req.url);
+  const workspaceId = searchParams.get("workspaceId");
+
+  const condition = workspaceId
+    ? and(eq(projects.userId, session.user.id), eq(projects.workspaceId, workspaceId))
+    : eq(projects.userId, session.user.id);
+
   const userProjects = await db
     .select()
     .from(projects)
-    .where(eq(projects.userId, session.user.id))
+    .where(condition)
     .orderBy(projects.updatedAt);
 
   return NextResponse.json(userProjects.reverse());
