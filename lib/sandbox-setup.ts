@@ -75,23 +75,18 @@ export async function bootstrapSandboxServer(sandbox: SandboxInstance): Promise<
 async function installDepsWithIntegrityCheck(sandbox: SandboxInstance): Promise<void> {
   for (let attempt = 1; attempt <= MAX_INSTALL_ATTEMPTS; attempt++) {
     // When resuming from a snapshot, node_modules may already exist with a
-    // valid or corrupted binary. Check first — skip the full install if the
-    // binary already works, saving significant time on warm resumes.
+    // valid binary. Check first — skip the full install if it already works,
+    // saving significant time on warm resumes.
     const alreadyWorking = await verifyClaudeBinary(sandbox);
     if (alreadyWorking) {
       process.stdout.write("[sandbox] claude binary already functional, skipping npm install\n");
       return;
     }
 
-    // Binary is missing or broken — do a clean install.
-    // If this is a retry (attempt > 1), node_modules was already wiped by
-    // cleanNodeModules() below. On first attempt, npm install is a no-op if
-    // packages are already present, so force a clean slate to ensure the
-    // platform-specific binary gets re-downloaded.
-    if (attempt > 1 || !(await hasNodeModules(sandbox))) {
-      // First attempt with no node_modules — normal install
-    } else {
-      // node_modules exists but binary is broken — clean and reinstall
+    // Binary is missing or broken. If node_modules already exists (e.g. from
+    // a snapshot with a corrupted binary), npm install would be a no-op —
+    // clean it first so the platform-specific binary gets re-downloaded.
+    if (attempt > 1) {
       await cleanNodeModules(sandbox);
     }
 
@@ -174,14 +169,6 @@ function prefixedLogStream(target: NodeJS.WritableStream, prefix: string): Writa
       callback();
     },
   });
-}
-
-async function hasNodeModules(sandbox: SandboxInstance): Promise<boolean> {
-  const result = await sandbox.runCommand({
-    cmd: "sh",
-    args: ["-c", `[ -d "${SERVER_DIR}/node_modules" ]`],
-  });
-  return result.exitCode === 0;
 }
 
 async function cleanNodeModules(sandbox: SandboxInstance): Promise<void> {
