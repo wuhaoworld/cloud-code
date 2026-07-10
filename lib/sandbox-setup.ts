@@ -17,6 +17,12 @@ type SandboxInstance = InstanceType<typeof import("@vercel/sandbox").Sandbox>;
 const SERVER_DIR = "/sandbox-server";
 const SERVER_PORT = 3001;
 const HEALTH_TIMEOUT_MS = 60_000;
+// The claude native binary is ~250MB. npm install can take a while on a cold
+// sandbox; give it a generous but bounded timeout so a stalled install never
+// hangs the request indefinitely, and so we can reliably detect+retry a
+// truly stuck install instead of leaving a half-written binary behind.
+const NPM_INSTALL_TIMEOUT_MS = 180_000;
+const MAX_INSTALL_ATTEMPTS = 2;
 
 /**
  * Install dependencies and start the HTTP server inside the sandbox.
@@ -27,25 +33,14 @@ export async function bootstrapSandboxServer(sandbox: SandboxInstance): Promise<
   // 1. Upload server bundle
   await uploadServerBundle(sandbox);
 
-  // 2. Install production deps inside the sandbox
-  await sandbox.runCommand({
-    cmd: "npm",
-    args: ["install", "--omit=dev"],
-    cwd: SERVER_DIR,
-  });
-
-  // 2b. Safety net: some npm/tar extraction paths (e.g. certain registries or
-  // proxies) don't preserve the executable bit on large native binaries.
-  // Force +x on the claude binary so a stripped exec bit doesn't surface as a
-  // confusing "binary exists but failed to launch" / libc-mismatch error.
-  await sandbox.runCommand({
-    cmd: "sh",
-    args: [
-      "-c",
-      `chmod +x ${SERVER_DIR}/node_modules/@anthropic-ai/claude-agent-sdk-*/claude 2>/dev/null || true`,
-    ],
-    cwd: SERVER_DIR,
-  });
+  // 2. Install production deps inside the sandbox, verifying the native
+  // `claude` binary actually works afterwards. If a previous run was
+  // interrupted mid-write (timeout, sandbox reclaim, concurrent caller),
+  // the binary can be left on disk with correct permissions but truncated/
+  // corrupted content — `existsSync()` still passes, but spawning it fails
+  // with a confusing "exists but failed to launch" error. Detect that case
+  // and force a clean reinstall instead of surfacing the cryptic error.
+  await installDepsWithIntegrityCheck(sandbox);
 
   // 3. Start server in detached mode (fire-and-forget)
   await sandbox.runCommand({
@@ -60,6 +55,87 @@ export async function bootstrapSandboxServer(sandbox: SandboxInstance): Promise<
   const baseUrl = sandbox.domain(SERVER_PORT);
   await waitForHealth(`${baseUrl}/health`);
   return baseUrl;
+}
+
+/**
+ * Run `npm install`, force the exec bit on the native binary, and verify the
+ * binary actually launches (`claude --version`). If verification fails,
+ * wipe node_modules and retry once — this recovers from a half-written
+ * binary left over by a previous interrupted install (timeout, concurrent
+ * bootstrap calls, sandbox reclaim mid-write, etc.).
+ */
+async function installDepsWithIntegrityCheck(sandbox: SandboxInstance): Promise<void> {
+  for (let attempt = 1; attempt <= MAX_INSTALL_ATTEMPTS; attempt++) {
+    const install = await sandbox.runCommand({
+      cmd: "npm",
+      args: ["install", "--omit=dev"],
+      cwd: SERVER_DIR,
+      timeoutMs: NPM_INSTALL_TIMEOUT_MS,
+    });
+
+    if (install.exitCode !== 0) {
+      if (attempt < MAX_INSTALL_ATTEMPTS) {
+        await cleanNodeModules(sandbox);
+        continue;
+      }
+      const stderr = await install.stderr().catch(() => "");
+      throw new Error(`npm install failed in sandbox (exit ${install.exitCode}): ${stderr.slice(-2000)}`);
+    }
+
+    // Safety net: some npm/tar extraction paths (e.g. certain registries or
+    // proxies) don't preserve the executable bit on large native binaries.
+    // Force +x on the claude binary so a stripped exec bit doesn't surface as a
+    // confusing "binary exists but failed to launch" / libc-mismatch error.
+    await sandbox.runCommand({
+      cmd: "sh",
+      args: [
+        "-c",
+        `chmod +x ${SERVER_DIR}/node_modules/@anthropic-ai/claude-agent-sdk-*/claude 2>/dev/null || true`,
+      ],
+      cwd: SERVER_DIR,
+    });
+
+    const verified = await verifyClaudeBinary(sandbox);
+    if (verified) return;
+
+    if (attempt < MAX_INSTALL_ATTEMPTS) {
+      // Binary exists but won't launch — most likely a truncated/corrupted
+      // file from an interrupted previous install. Wipe and reinstall clean
+      // rather than propagating the cryptic SDK error to the caller.
+      await cleanNodeModules(sandbox);
+      continue;
+    }
+
+    throw new Error(
+      "claude native binary exists but failed to launch after reinstall attempt. " +
+        "This may indicate a corrupted download, insufficient disk space, or an " +
+        "actual libc mismatch in the sandbox image."
+    );
+  }
+}
+
+/**
+ * Verify the claude native binary can actually execute, by running
+ * `claude --version`. Returns false if the binary is missing, not
+ * executable, or crashes on launch (e.g. truncated file).
+ */
+async function verifyClaudeBinary(sandbox: SandboxInstance): Promise<boolean> {
+  const result = await sandbox.runCommand({
+    cmd: "sh",
+    args: [
+      "-c",
+      `bin=$(ls ${SERVER_DIR}/node_modules/@anthropic-ai/claude-agent-sdk-*/claude 2>/dev/null | head -1); ` +
+        `[ -n "$bin" ] && "$bin" --version >/dev/null 2>&1`,
+    ],
+  });
+  return result.exitCode === 0;
+}
+
+async function cleanNodeModules(sandbox: SandboxInstance): Promise<void> {
+  await sandbox.runCommand({
+    cmd: "rm",
+    args: ["-rf", `${SERVER_DIR}/node_modules`, `${SERVER_DIR}/package-lock.json`],
+  });
 }
 
 async function uploadServerBundle(sandbox: SandboxInstance): Promise<void> {

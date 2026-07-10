@@ -27,6 +27,14 @@ const runningInstances = new Map<string, InstanceType<typeof import("@vercel/san
 // workspaceId → base URL of the in-sandbox HTTP server
 const serverUrls = new Map<string, string>();
 
+// workspaceId → in-flight bootstrap promise. Without this, concurrent calls
+// to ensureServerRunning() for the same workspace (e.g. two near-simultaneous
+// requests, or multiple serverless instances in production) would each see a
+// cache miss and independently run `npm install` against the same
+// node_modules directory in the sandbox, risking a corrupted/truncated
+// native binary write.
+const bootstrapPromises = new Map<string, Promise<string>>();
+
 export class SandboxManager {
   /**
    * Return a running Sandbox for the workspace, creating one if needed.
@@ -109,9 +117,22 @@ export class SandboxManager {
     const cached = serverUrls.get(workspaceId);
     if (cached) return cached;
 
-    const baseUrl = await bootstrapSandboxServer(sandbox);
-    serverUrls.set(workspaceId, baseUrl);
-    return baseUrl;
+    // Deduplicate concurrent bootstrap calls for the same workspace so only
+    // one `npm install` ever runs against the sandbox at a time.
+    const inFlight = bootstrapPromises.get(workspaceId);
+    if (inFlight) return inFlight;
+
+    const promise = bootstrapSandboxServer(sandbox)
+      .then((baseUrl) => {
+        serverUrls.set(workspaceId, baseUrl);
+        return baseUrl;
+      })
+      .finally(() => {
+        bootstrapPromises.delete(workspaceId);
+      });
+
+    bootstrapPromises.set(workspaceId, promise);
+    return promise;
   }
 
   /**
@@ -150,6 +171,7 @@ export class SandboxManager {
 
     runningInstances.delete(workspaceId);
     serverUrls.delete(workspaceId);
+    bootstrapPromises.delete(workspaceId);
     await sandbox.stop();
 
     await db
