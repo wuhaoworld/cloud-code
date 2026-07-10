@@ -11,6 +11,7 @@
 
 import path from "path";
 import fs from "fs";
+import { Writable } from "stream";
 
 type SandboxInstance = InstanceType<typeof import("@vercel/sandbox").Sandbox>;
 
@@ -66,11 +67,19 @@ export async function bootstrapSandboxServer(sandbox: SandboxInstance): Promise<
  */
 async function installDepsWithIntegrityCheck(sandbox: SandboxInstance): Promise<void> {
   for (let attempt = 1; attempt <= MAX_INSTALL_ATTEMPTS; attempt++) {
+    // Stream npm's output to the server process's own stdout/stderr as it
+    // happens, instead of only inspecting it after a failure. The claude
+    // native binary is ~250MB, so this install can take a while — live
+    // output makes it possible to tell (from server logs) whether an
+    // in-progress install is still making progress or has actually stalled,
+    // rather than staring at a black box until the timeout fires.
     const install = await sandbox.runCommand({
       cmd: "npm",
-      args: ["install", "--omit=dev"],
+      args: ['install', '-g', '@anthropic-ai/claude-code'],
       cwd: SERVER_DIR,
       timeoutMs: NPM_INSTALL_TIMEOUT_MS,
+      stdout: prefixedLogStream(process.stdout, "[sandbox npm install] "),
+      stderr: prefixedLogStream(process.stderr, "[sandbox npm install] "),
     });
 
     if (install.exitCode !== 0) {
@@ -131,6 +140,21 @@ async function verifyClaudeBinary(sandbox: SandboxInstance): Promise<boolean> {
   return result.exitCode === 0;
 }
 
+/**
+ * Wrap a target Node stream (e.g. process.stdout) in a Writable that
+ * prefixes every chunk before forwarding it. Used to tag streamed npm
+ * install output in server logs so it's clear which sandbox operation
+ * produced it, without needing a real per-request logger.
+ */
+function prefixedLogStream(target: NodeJS.WritableStream, prefix: string): Writable {
+  return new Writable({
+    write(chunk, _encoding, callback) {
+      target.write(prefix + chunk.toString());
+      callback();
+    },
+  });
+}
+
 async function cleanNodeModules(sandbox: SandboxInstance): Promise<void> {
   await sandbox.runCommand({
     cmd: "rm",
@@ -169,6 +193,11 @@ async function uploadServerBundle(sandbox: SandboxInstance): Promise<void> {
   // Vercel Sandbox VMs boot an Amazon Linux 2023 image (glibc), so npm's platform
   // resolution will correctly pull in the linux-x64 (glibc) optional dependency of
   // the main SDK package on its own — no need to pin a musl variant.
+  // Pin to the exact version used locally (see package.json) so sandbox
+  // cold-starts (fresh create, or snapshot-expired rebuild) always install
+  // the same SDK version we developed/tested against. "latest" would let
+  // the in-sandbox version silently drift out from under the local one,
+  // making bugs hard to reproduce.
   const pkg = JSON.stringify({
     name: "sandbox-server",
     version: "1.0.0",
@@ -176,7 +205,7 @@ async function uploadServerBundle(sandbox: SandboxInstance): Promise<void> {
     dependencies: {
       express: "^4.21.0",
       uuid: "^11.0.0",
-      "@anthropic-ai/claude-agent-sdk": "latest",
+      "@anthropic-ai/claude-agent-sdk": "0.3.183",
     },
   });
   await sandbox.fs.writeFile(`${SERVER_DIR}/package.json`, pkg);
