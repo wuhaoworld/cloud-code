@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { FolderOpen, Loader2 } from "lucide-react";
+import { FolderOpen, Loader2, Box } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -27,11 +27,15 @@ export function CreateProjectDialog({
   onOpenChange,
 }: CreateProjectDialogProps) {
   const addProject = useAppStore((s) => s.addProject);
+  const { workspaces, currentWorkspaceId } = useAppStore();
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
     name: "",
     path: "",
   });
+
+  const currentWorkspace = workspaces.find((w) => w.id === currentWorkspaceId);
+  const isSandboxMode = currentWorkspace?.sandboxStatus === "running";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,7 +76,9 @@ export function CreateProjectDialog({
             新建项目
           </DialogTitle>
           <DialogDescription>
-            填写项目信息并指定本地目录路径
+            {isSandboxMode
+              ? "当前 Workspace 运行在 Sandbox 中，路径为 sandbox 内的相对目录"
+              : "填写项目信息并指定本地目录路径"}
           </DialogDescription>
         </DialogHeader>
 
@@ -89,17 +95,28 @@ export function CreateProjectDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="project-path">本地目录路径 *</Label>
+            <Label htmlFor="project-path" className="flex items-center gap-1.5">
+              {isSandboxMode ? (
+                <>
+                  <Box className="size-3.5 text-emerald-600" />
+                  Sandbox 目录名 *
+                </>
+              ) : (
+                "本地目录路径 *"
+              )}
+            </Label>
             <Input
               id="project-path"
-              placeholder="/Users/yourname/projects/my-project"
+              placeholder={isSandboxMode ? "my-project" : "/Users/yourname/projects/my-project"}
               value={form.path}
               onChange={(e) => setForm({ ...form, path: e.target.value })}
               className="font-mono text-sm"
               required
             />
             <p className="text-xs text-muted-foreground">
-              必须是服务器上有效的绝对路径
+              {isSandboxMode
+                ? "在 sandbox 内映射为 /workspace/<目录名>，仅限字母、数字和连字符"
+                : "必须是服务器上有效的绝对路径"}
             </p>
           </div>
 

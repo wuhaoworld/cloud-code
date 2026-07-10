@@ -22,6 +22,33 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAppStore, type Workspace } from "@/store/app-store";
 
+type SandboxStatus = Workspace["sandboxStatus"];
+
+function SandboxIndicator({ status }: { status: SandboxStatus }) {
+  if (status === "idle") return null;
+
+  const config: Record<
+    Exclude<SandboxStatus, "idle">,
+    { color: string; pulse: boolean; label: string }
+  > = {
+    starting: { color: "bg-amber-400", pulse: true, label: "启动中" },
+    running: { color: "bg-emerald-500", pulse: false, label: "运行中" },
+    snapshotting: { color: "bg-blue-400", pulse: true, label: "快照中" },
+  };
+
+  const { color, pulse, label } = config[status as Exclude<SandboxStatus, "idle">];
+
+  return (
+    <span
+      className="flex items-center gap-1 text-[10px] text-muted-foreground"
+      title={`Sandbox ${label}`}
+    >
+      <span className={`inline-block size-1.5 rounded-full ${color} ${pulse ? "animate-pulse" : ""}`} />
+      <span className="hidden group-hover:inline">{label}</span>
+    </span>
+  );
+}
+
 export function WorkspaceSwitcher() {
   const { workspaces, currentWorkspaceId, setWorkspaces, addWorkspace, setCurrentWorkspace } =
     useAppStore();
@@ -88,13 +115,16 @@ export function WorkspaceSwitcher() {
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button className="flex items-center gap-1.5 flex-1 min-w-0 rounded-md hover:bg-[#EBEBED] px-2 py-2 -mx-2 transition-colors">
+          <button className="group flex items-center gap-1.5 flex-1 min-w-0 rounded-md hover:bg-[#EBEBED] px-2 py-2 -mx-2 transition-colors">
             <div className="size-6 shrink-0 rounded-md bg-primary flex items-center justify-center">
               <Sparkles className="size-3.5 text-primary-foreground" />
             </div>
             <span className="font-semibold text-sm tracking-tight truncate flex-1 text-left">
               {loading ? "Cloud Code" : (current?.name ?? "Cloud Code")}
             </span>
+            {current && current.sandboxStatus !== "idle" && (
+              <SandboxIndicator status={current.sandboxStatus} />
+            )}
             <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
           </button>
         </DropdownMenuTrigger>
@@ -110,9 +140,14 @@ export function WorkspaceSwitcher() {
                 <Sparkles className="size-3 text-primary" />
               </div>
               <span className="flex-1 truncate">{ws.name}</span>
-              {ws.id === currentWorkspaceId && (
-                <Check className="size-3.5 text-primary shrink-0" />
-              )}
+              <div className="flex items-center gap-1.5 shrink-0">
+                {ws.sandboxStatus !== "idle" && (
+                  <SandboxIndicator status={ws.sandboxStatus} />
+                )}
+                {ws.id === currentWorkspaceId && (
+                  <Check className="size-3.5 text-primary" />
+                )}
+              </div>
             </DropdownMenuItem>
           ))}
 

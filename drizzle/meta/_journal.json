@@ -1,0 +1,13 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1783668815910,
+      "tag": "0000_add_sandbox_fields_to_workspace",
+      "breakpoints": true
+    }
+  ]
+}

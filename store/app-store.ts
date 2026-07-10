@@ -6,6 +6,9 @@ export interface Workspace {
   id: string;
   name: string;
   userId: string;
+  sandboxId?: string | null;
+  sandboxSnapshotId?: string | null;
+  sandboxStatus: "idle" | "starting" | "running" | "snapshotting";
   createdAt: number;
   updatedAt: number;
 }
