@@ -76,12 +76,14 @@ export class SandboxManager {
         ...credentials,
         source: { type: "snapshot", snapshotId: workspace.sandboxSnapshotId },
         timeout: 300_000,
+        ports: [3001],
       });
     } else {
       sandbox = await Sandbox.create({
         ...credentials,
         runtime: "node24",
         timeout: 300_000,
+        ports: [3001],
       });
     }
 

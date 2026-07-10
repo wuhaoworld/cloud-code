@@ -76,7 +76,9 @@ async function uploadServerBundle(sandbox: SandboxInstance): Promise<void> {
 
   await sandbox.fs.writeFile(`${SERVER_DIR}/dist/index.js`, source);
 
-  // Write minimal package.json so npm install works
+  // Write minimal package.json so npm install works.
+  // Explicitly include the musl variant because Vercel Sandbox VMs run Alpine Linux (musl libc).
+  // Without this, npm may install the glibc linux-x64 optional dep instead, which fails to launch.
   const pkg = JSON.stringify({
     name: "sandbox-server",
     version: "1.0.0",
@@ -85,6 +87,7 @@ async function uploadServerBundle(sandbox: SandboxInstance): Promise<void> {
       express: "^4.21.0",
       uuid: "^11.0.0",
       "@anthropic-ai/claude-agent-sdk": "latest",
+      "@anthropic-ai/claude-agent-sdk-linux-x64-musl": "latest",
     },
   });
   await sandbox.fs.writeFile(`${SERVER_DIR}/package.json`, pkg);
