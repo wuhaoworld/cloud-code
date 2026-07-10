@@ -15,12 +15,14 @@
     "@libsql/client": "^0.17.4",
     "@streamdown/cjk": "^1.0.3",
     "@streamdown/code": "^1.1.1",
+    "@vercel/sandbox": "^2.5.0",
     "better-auth": "^1.6.19",
     "better-sqlite3": "^12.11.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "date-fns": "^4.4.0",
+    "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
     "embla-carousel-react": "^8.6.0",
     "gray-matter": "^4.0.3",
@@ -47,14 +49,14 @@
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/better-sqlite3": "^7.6.13",
-    "@types/node": "^20",
+    "@types/node": "^20.19.43",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "drizzle-kit": "^0.31.10",
     "eslint": "^9",
     "eslint-config-next": "16.2.9",
     "tailwindcss": "^4",
-    "tsx": "^4.22.4",
-    "typescript": "^5"
+    "tsx": "^4.23.0",
+    "typescript": "^5.9.3"
   }
 }
