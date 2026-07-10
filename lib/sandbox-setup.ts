@@ -105,21 +105,39 @@ async function installDepsWithIntegrityCheck(sandbox: SandboxInstance): Promise<
     });
 
     const verified = await verifyClaudeBinary(sandbox);
-    if (verified) return;
-
-    if (attempt < MAX_INSTALL_ATTEMPTS) {
-      // Binary exists but won't launch — most likely a truncated/corrupted
-      // file from an interrupted previous install. Wipe and reinstall clean
-      // rather than propagating the cryptic SDK error to the caller.
-      await cleanNodeModules(sandbox);
-      continue;
+    if (!verified) {
+      if (attempt < MAX_INSTALL_ATTEMPTS) {
+        await cleanNodeModules(sandbox);
+        continue;
+      }
+      throw new Error(
+        "claude native binary exists but failed to launch after reinstall attempt. " +
+          "This may indicate a corrupted download, insufficient disk space, or an " +
+          "actual libc mismatch in the sandbox image."
+      );
     }
 
-    throw new Error(
-      "claude native binary exists but failed to launch after reinstall attempt. " +
-        "This may indicate a corrupted download, insufficient disk space, or an " +
-        "actual libc mismatch in the sandbox image."
-    );
+    // Install sandbox server's own dependencies (express, uuid, claude-agent-sdk)
+    // from the local package.json. The global install above only provides the
+    // `claude` CLI binary — it does NOT install the SDK that the server requires
+    // at runtime (marked external by esbuild).
+    const localInstall = await sandbox.runCommand({
+      cmd: "npm",
+      args: ["install"],
+      cwd: SERVER_DIR,
+      timeoutMs: NPM_INSTALL_TIMEOUT_MS,
+      stdout: prefixedLogStream(process.stdout, "[sandbox npm install-local] "),
+      stderr: prefixedLogStream(process.stderr, "[sandbox npm install-local] "),
+    });
+
+    if (localInstall.exitCode !== 0) {
+      const stderr = await localInstall.stderr().catch(() => "");
+      throw new Error(
+        `npm install (local deps) failed in sandbox (exit ${localInstall.exitCode}): ${stderr.slice(-2000)}`
+      );
+    }
+
+    return;
   }
 }
 
