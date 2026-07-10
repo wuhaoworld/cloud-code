@@ -34,6 +34,19 @@ export async function bootstrapSandboxServer(sandbox: SandboxInstance): Promise<
     cwd: SERVER_DIR,
   });
 
+  // 2b. Safety net: some npm/tar extraction paths (e.g. certain registries or
+  // proxies) don't preserve the executable bit on large native binaries.
+  // Force +x on the claude binary so a stripped exec bit doesn't surface as a
+  // confusing "binary exists but failed to launch" / libc-mismatch error.
+  await sandbox.runCommand({
+    cmd: "sh",
+    args: [
+      "-c",
+      `chmod +x ${SERVER_DIR}/node_modules/@anthropic-ai/claude-agent-sdk-*/claude 2>/dev/null || true`,
+    ],
+    cwd: SERVER_DIR,
+  });
+
   // 3. Start server in detached mode (fire-and-forget)
   await sandbox.runCommand({
     cmd: "node",
@@ -77,8 +90,9 @@ async function uploadServerBundle(sandbox: SandboxInstance): Promise<void> {
   await sandbox.fs.writeFile(`${SERVER_DIR}/dist/index.js`, source);
 
   // Write minimal package.json so npm install works.
-  // Explicitly include the musl variant because Vercel Sandbox VMs run Alpine Linux (musl libc).
-  // Without this, npm may install the glibc linux-x64 optional dep instead, which fails to launch.
+  // Vercel Sandbox VMs boot an Amazon Linux 2023 image (glibc), so npm's platform
+  // resolution will correctly pull in the linux-x64 (glibc) optional dependency of
+  // the main SDK package on its own — no need to pin a musl variant.
   const pkg = JSON.stringify({
     name: "sandbox-server",
     version: "1.0.0",
@@ -87,7 +101,6 @@ async function uploadServerBundle(sandbox: SandboxInstance): Promise<void> {
       express: "^4.21.0",
       uuid: "^11.0.0",
       "@anthropic-ai/claude-agent-sdk": "latest",
-      "@anthropic-ai/claude-agent-sdk-linux-x64-musl": "latest",
     },
   });
   await sandbox.fs.writeFile(`${SERVER_DIR}/package.json`, pkg);

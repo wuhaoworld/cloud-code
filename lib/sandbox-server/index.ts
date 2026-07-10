@@ -85,15 +85,14 @@ app.post("/stream", async (req: Request, res: Response) => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { query } = require("@anthropic-ai/claude-agent-sdk");
 
-    // Vercel Sandbox VMs run Alpine Linux (musl libc). Point directly at the musl binary
-    // so the SDK doesn't try to launch the glibc linux-x64 binary, which fails on musl.
-    const muslBinaryPath = "/sandbox-server/node_modules/@anthropic-ai/claude-agent-sdk-linux-x64-musl/claude";
-
+    // Vercel Sandbox VMs boot an Amazon Linux 2023 image (glibc), not Alpine/musl.
+    // Let the SDK auto-resolve its bundled optional-dependency binary for the
+    // current platform (@anthropic-ai/claude-agent-sdk-linux-x64) instead of
+    // pointing at a hardcoded path.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const queryOptions: any = {
       cwd,
       permissionMode: permissionMode ?? "default",
-      pathToClaudeCodeExecutable: muslBinaryPath,
       enableFileCheckpointing: true,
       includePartialMessages: true,
       ...(model ? { model } : {}),
