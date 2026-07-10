@@ -99,7 +99,7 @@ async function installDepsWithIntegrityCheck(sandbox: SandboxInstance): Promise<
       cmd: "sh",
       args: [
         "-c",
-        `chmod +x ${SERVER_DIR}/node_modules/@anthropic-ai/claude-agent-sdk-*/claude 2>/dev/null || true`,
+        `chmod +x $(which claude 2>/dev/null) 2>/dev/null || true`,
       ],
       cwd: SERVER_DIR,
     });
@@ -133,7 +133,7 @@ async function verifyClaudeBinary(sandbox: SandboxInstance): Promise<boolean> {
     cmd: "sh",
     args: [
       "-c",
-      `bin=$(ls ${SERVER_DIR}/node_modules/@anthropic-ai/claude-agent-sdk-*/claude 2>/dev/null | head -1); ` +
+      `bin=$(which claude 2>/dev/null); ` +
         `[ -n "$bin" ] && "$bin" --version >/dev/null 2>&1`,
     ],
   });
@@ -159,6 +159,12 @@ async function cleanNodeModules(sandbox: SandboxInstance): Promise<void> {
   await sandbox.runCommand({
     cmd: "rm",
     args: ["-rf", `${SERVER_DIR}/node_modules`, `${SERVER_DIR}/package-lock.json`],
+  });
+  // Also uninstall the globally installed claude CLI so a corrupted binary
+  // doesn't persist across reinstall attempts.
+  await sandbox.runCommand({
+    cmd: "npm",
+    args: ["uninstall", "-g", "@anthropic-ai/claude-code"],
   });
 }
 
