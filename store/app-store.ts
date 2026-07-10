@@ -20,6 +20,7 @@ export interface Project {
   name: string;
   path: string;
   defaultModel?: string | null;
+  workspaceId?: string | null;
   userId: string;
   createdAt: number;
   updatedAt: number;

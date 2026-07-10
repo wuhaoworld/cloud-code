@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
-import { projects, projectSessions, chatMessages } from "@/db/schema";
+import { projects, projectSessions, chatMessages, workspaces } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import type { Block } from "@/store/types";
@@ -13,6 +13,8 @@ import {
   toPermissionResult,
 } from "@/lib/pending-permissions";
 import { validateProjectDirectory } from "@/lib/project-path";
+import { SandboxManager } from "@/lib/sandbox-manager";
+import { sandboxStreamProxy } from "@/lib/sandbox-proxy";
 
 interface PendingMessage {
   id: string;
@@ -66,13 +68,50 @@ export async function POST(req: NextRequest) {
   }
 
   let projectPath: string;
-  try {
-    projectPath = await validateProjectDirectory(project.path);
-  } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Invalid project path" },
-      { status: 400 }
-    );
+  let useSandbox = false;
+  let sandboxBaseUrl = "";
+  let sandboxCwd = "";
+
+  if (project.workspaceId) {
+    const [workspace] = await db
+      .select()
+      .from(workspaces)
+      .where(and(eq(workspaces.id, project.workspaceId), eq(workspaces.userId, session.user.id)))
+      .limit(1);
+
+    if (workspace) {
+      // Auto-start if idle; wait if already starting
+      if (workspace.sandboxStatus === "idle" || workspace.sandboxStatus === "starting") {
+        await SandboxManager.getOrCreate(project.workspaceId);
+      }
+
+      const sandboxInstance = SandboxManager.getRunningInstance(project.workspaceId);
+      if (sandboxInstance) {
+        useSandbox = true;
+        sandboxBaseUrl = await SandboxManager.ensureServerRunning(project.workspaceId, sandboxInstance);
+        sandboxCwd = `/workspace/${project.path}`;
+        projectPath = sandboxCwd;
+      } else {
+        // Sandbox failed to start — surface a clear error instead of silently falling back
+        return NextResponse.json(
+          { error: "Sandbox failed to start for this workspace. Check the workspace sandbox status." },
+          { status: 503 }
+        );
+      }
+    }
+  }
+
+  if (!useSandbox) {
+    try {
+      projectPath = await validateProjectDirectory(project.path);
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : "Invalid project path" },
+        { status: 400 }
+      );
+    }
+  } else {
+    projectPath = sandboxCwd;
   }
 
   const encoder = new TextEncoder();
@@ -99,6 +138,111 @@ export async function POST(req: NextRequest) {
       };
 
       try {
+        // ── Sandbox branch ──────────────────────────────────────────────────
+        if (useSandbox) {
+          const assistantMsgId = uuidv4();
+          const isFirstMessage = !sessionId;
+          const sortBase = sessionId ? await getSortBase(sessionId) : 0;
+          let sortCounter = 0;
+          let newSessionId = sessionId;
+
+          const pendingMessages: PendingMessage[] = [
+            {
+              id: userMsgId,
+              role: "user",
+              blocks: [{ type: "text", text: prompt }],
+              sortOrder: sortBase + sortCounter++,
+            },
+          ];
+
+          // Wrap emit so permission_request events get the assistantMsgId injected
+          const sandboxEmit = (eventType: string, data: Record<string, unknown>) => {
+            if (
+              eventType !== "permission_request" &&
+              eventType !== "permission_resolved" &&
+              eventType !== "done" &&
+              eventType !== "error" &&
+              eventType !== "session_init"
+            ) {
+              emit(eventType, { ...data, msgId: assistantMsgId });
+            } else {
+              emit(eventType, data);
+            }
+          };
+
+          // Listen for session_init to capture sessionId
+          const origEmit = sandboxEmit;
+          const wrappedEmit = (eventType: string, data: Record<string, unknown>) => {
+            if (eventType === "session_init" && data.sessionId) {
+              const initSessionId = data.sessionId as string;
+              newSessionId = initSessionId;
+              if (isFirstMessage) {
+                const now = new Date();
+                db.insert(projectSessions)
+                  .values({
+                    sessionId: initSessionId,
+                    projectId,
+                    title: prompt.slice(0, 50) + (prompt.length > 50 ? "..." : ""),
+                    lastActiveAt: now,
+                    createdAt: now,
+                  })
+                  .onConflictDoUpdate({ target: projectSessions.sessionId, set: { lastActiveAt: now } })
+                  .catch(() => {/* ignore */});
+              }
+            }
+            origEmit(eventType, data);
+          };
+
+          const { sessionId: finalSessionId, assistantBlocks } = await sandboxStreamProxy(
+            {
+              sandboxBaseUrl,
+              projectId,
+              prompt,
+              cwd: sandboxCwd,
+              sessionId,
+              model,
+              permissionMode,
+              userMsgId,
+              assistantMsgId,
+              workspaceId: project.workspaceId!,
+            },
+            wrappedEmit,
+            req.signal
+          );
+
+          // Persist messages
+          const resolvedSessionId = finalSessionId ?? newSessionId;
+          if (resolvedSessionId && pendingMessages.length > 0) {
+            const now = new Date();
+            // Include assistant message with blocks accumulated by the proxy
+            pendingMessages.push({
+              id: assistantMsgId,
+              role: "assistant",
+              blocks: assistantBlocks,
+              sortOrder: sortBase + sortCounter++,
+            });
+            await db.insert(chatMessages).values(
+              pendingMessages.map((m) => ({
+                id: m.id,
+                sessionId: resolvedSessionId,
+                role: m.role,
+                type: m.role === "user" ? "text" : "blocks",
+                content: m.role === "user" ? (m.blocks[0] as { text: string }).text : "",
+                toolCallJson: JSON.stringify(m.blocks),
+                sortOrder: m.sortOrder,
+                createdAt: now,
+              }))
+            );
+            if (!isFirstMessage) {
+              await db.update(projectSessions)
+                .set({ lastActiveAt: now })
+                .where(eq(projectSessions.sessionId, resolvedSessionId));
+            }
+          }
+          return;
+        }
+
+        // ── Direct (local) branch ────────────────────────────────────────────
         const { query } = await import("@anthropic-ai/claude-agent-sdk");
 
         let newSessionId = sessionId;

@@ -1,0 +1,1 @@
+ALTER TABLE `project` ADD `workspace_id` text REFERENCES workspace(id);

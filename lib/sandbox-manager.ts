@@ -1,3 +1,4 @@
+import { bootstrapSandboxServer } from "./sandbox-setup";
 import { db } from "@/db";
 import { workspaces } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -22,6 +23,9 @@ function getCredentials() {
 // NOTE: This is per-process memory. In multi-instance deployments the sandbox
 // must be looked up from DB (sandboxId) and reconnected via Sandbox.connect().
 const runningInstances = new Map<string, InstanceType<typeof import("@vercel/sandbox").Sandbox>>();
+
+// workspaceId → base URL of the in-sandbox HTTP server
+const serverUrls = new Map<string, string>();
 
 export class SandboxManager {
   /**
@@ -77,16 +81,19 @@ export class SandboxManager {
 
   /**
    * Ensure the in-sandbox HTTP server is running. Returns the base URL.
-   * Assumes the server bundle is already present in the snapshot; if not,
-   * Phase 2 will add the full bootstrap logic here.
+   * Uploads the server bundle, installs deps, and starts the server if needed.
+   * Caches the base URL per workspace so re-calls are cheap.
    */
   static async ensureServerRunning(
     workspaceId: string,
     sandbox: InstanceType<typeof import("@vercel/sandbox").Sandbox>
   ): Promise<string> {
-    // Phase 2 will install deps and start the express server here.
-    // domain(port) returns the sandbox's public HTTPS tunnel URL for that port.
-    return sandbox.domain(3001);
+    const cached = serverUrls.get(workspaceId);
+    if (cached) return cached;
+
+    const baseUrl = await bootstrapSandboxServer(sandbox);
+    serverUrls.set(workspaceId, baseUrl);
+    return baseUrl;
   }
 
   /**
@@ -124,6 +131,7 @@ export class SandboxManager {
     if (!sandbox) return;
 
     runningInstances.delete(workspaceId);
+    serverUrls.delete(workspaceId);
     await sandbox.stop();
 
     await db

@@ -6,6 +6,7 @@ import {
   createSessionPermissionUpdate,
   pendingPermissions,
 } from "@/lib/pending-permissions";
+import { pendingSandboxApprovals } from "@/lib/sandbox-approvals";
 
 // POST /api/chat/approve — 用户审批挂起的权限请求
 export async function POST(req: NextRequest) {
@@ -27,6 +28,29 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // ── Sandbox path: forward decision to the in-sandbox HTTP server ──────────
+  const sandboxEntry = pendingSandboxApprovals.get(requestId);
+  if (sandboxEntry) {
+    pendingSandboxApprovals.delete(requestId);
+    const behavior = action === "deny" ? "deny" : "allow";
+    try {
+      await fetch(`${sandboxEntry.sandboxBaseUrl}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          requestId,
+          behavior,
+          message: action === "deny" ? "Permission denied by user." : undefined,
+        }),
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to forward decision to sandbox";
+      return NextResponse.json({ error: message }, { status: 502 });
+    }
+    return NextResponse.json({ success: true, behavior });
+  }
+
+  // ── Local (direct) path ────────────────────────────────────────────────────
   const pending = pendingPermissions.get(requestId);
   if (!pending) {
     return NextResponse.json(

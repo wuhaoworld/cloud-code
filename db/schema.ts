@@ -36,8 +36,9 @@ export const projects = sqliteTable(
   {
     id: text("id").primaryKey(), // UUID
     name: text("name").notNull(), // 项目显示名称
-    path: text("path").notNull(), // 物理目录绝对路径
+    path: text("path").notNull(), // 物理目录绝对路径（sandbox 模式下为相对路径）
     defaultModel: text("default_model").default("claude-opus-4-5"), // 默认模型
+    workspaceId: text("workspace_id").references(() => workspaces.id, { onDelete: "set null" }), // 所属 workspace（null = 不使用 sandbox）
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
