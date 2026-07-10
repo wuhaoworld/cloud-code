@@ -24,6 +24,12 @@
       "sourceType": "github",
       "skillPath": "skills/next-best-practices/SKILL.md",
       "computedHash": "f4678aef4ffc10a5ea64a91e57abe5a5081af813b06d58d565caf3e8ef56e26c"
+    },
+    "sandbox": {
+      "source": "vercel/sandbox",
+      "sourceType": "github",
+      "skillPath": "skills/sandbox/SKILL.md",
+      "computedHash": "0332f66026a667861ecd5e1f7cf405a477633a95b5a58a0a2d05fdca37babc91"
     }
   }
 }
