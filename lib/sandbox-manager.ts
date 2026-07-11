@@ -23,17 +23,13 @@ function getCredentials() {
 // bootstrapping the in-sandbox server alone (npm install of the ~250MB
 // claude native binary) can take 1-3 minutes, leaving almost no time for the
 // first chat turn before the VM is auto-stopped. Start it with more
-// breathing room; the heartbeat below keeps extending it during real usage.
-const INITIAL_TIMEOUT_MS = 20 * 60 * 1000; // 20 minutes
+// breathing room; we extend it to 30 minutes on every dialogue turn.
+const INITIAL_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 // How often the heartbeat checks in and (if the workspace is still active)
-// extends the sandbox's timeout.
+// checks if the sandbox is still responsive.
 const HEARTBEAT_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
-// How much to extend the timeout by on each heartbeat tick.
-const HEARTBEAT_EXTEND_MS = 20 * 60 * 1000; // 20 minutes
-// Stop renewing (and let Vercel's own timeout stop the VM) once the
-// workspace has had no activity for this long, so unused sandboxes don't
-// run — and bill — forever.
-const IDLE_RENEWAL_CUTOFF_MS = 15 * 60 * 1000; // 15 minutes
+// Stop checking once the workspace has had no activity for this long.
+const IDLE_RENEWAL_CUTOFF_MS = 30 * 60 * 1000; // 30 minutes
 
 // In-process cache: workspaceId → running Sandbox instance
 // NOTE: This is per-process memory. In multi-instance deployments the sandbox
@@ -71,10 +67,8 @@ function stopHeartbeat(workspaceId: string) {
 }
 
 /**
- * Keep extending the sandbox's timeout on a fixed interval as long as the
- * workspace has had recent activity. Once activity goes stale (the user
- * stopped chatting), we stop renewing so the sandbox naturally auto-stops
- * per Vercel's own timeout instead of running indefinitely.
+ * Periodically verify the sandbox's responsiveness as long as the workspace
+ * is actively in use. If the heartbeat fails, clean up local state.
  */
 function startHeartbeat(
   workspaceId: string,
@@ -89,7 +83,9 @@ function startHeartbeat(
       return;
     }
     try {
-      await sandbox.extendTimeout(HEARTBEAT_EXTEND_MS);
+      // Verify sandbox is still alive without modifying its remaining timeout.
+      // Every dialogue turn itself directly extends the timeout to 30 minutes.
+      await sandbox.extendTimeout(0);
     } catch {
       // Sandbox is likely already gone (stopped/deleted) — clean up local
       // state so the next request falls through to recreate/reconnect
@@ -100,6 +96,30 @@ function startHeartbeat(
     }
   }, HEARTBEAT_INTERVAL_MS);
   heartbeats.set(workspaceId, handle);
+}
+
+/**
+ * Ensure the sandbox session has at least `targetMs` remaining timeout.
+ * If the current remaining time is less than `targetMs`, we extend it by the difference.
+ */
+async function ensureTargetTimeout(
+  sandbox: InstanceType<typeof import("@vercel/sandbox").Sandbox>,
+  targetMs: number
+) {
+  try {
+    const expiresAt = sandbox.expiresAt;
+    if (expiresAt) {
+      const remainingMs = expiresAt.getTime() - Date.now();
+      if (remainingMs < targetMs) {
+        const extension = targetMs - remainingMs;
+        await sandbox.extendTimeout(extension);
+      }
+    } else {
+      await sandbox.extendTimeout(targetMs);
+    }
+  } catch (err) {
+    console.error("Failed to extend sandbox timeout:", err);
+  }
 }
 
 export class SandboxManager {
@@ -117,7 +137,11 @@ export class SandboxManager {
 
     // Return cached in-process instance if still live
     const cached = runningInstances.get(workspaceId);
-    if (cached) return cached;
+    if (cached) {
+      // Sliding window renewal: ensure at least 30 minutes remaining on every dialogue turn
+      await ensureTargetTimeout(cached, 30 * 60 * 1000);
+      return cached;
+    }
 
     const [workspace] = await db
       .select()
@@ -158,6 +182,9 @@ export class SandboxManager {
           await restartServerIfStopped(sbx);
         },
       });
+
+      // Ensure the sandbox timeout is extended to at least 30 minutes on successful startup/resume
+      await ensureTargetTimeout(sandbox, 30 * 60 * 1000);
 
       runningInstances.set(workspaceId, sandbox);
       startHeartbeat(workspaceId, sandbox);
