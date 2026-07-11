@@ -88,10 +88,14 @@ export async function POST(req: NextRequest) {
       })
       .returning();
 
-    // Auto-start the sandbox in the background if it's idle
-    if (workspace.sandboxStatus === "idle") {
-      SandboxManager.getOrCreate(workspaceId).catch(() => {/* sandbox start errors surface via the status API */});
-    }
+    // Ensure the sandbox is running and create the project's backing directory
+    // (/workspace/<path>) in the background. Chat requests also defensively
+    // mkdir -p this directory before running, but doing it here means the
+    // directory is ready without waiting on the first chat message, and
+    // covers the case where the sandbox was already idle.
+    SandboxManager.getOrCreate(workspaceId)
+      .then((sandbox) => SandboxManager.ensureProjectDirectory(sandbox, newProject.path))
+      .catch(() => {/* sandbox start errors surface via the status API; chat route retries mkdir */});
 
     return NextResponse.json(newProject, { status: 201 });
   }

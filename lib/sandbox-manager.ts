@@ -271,6 +271,28 @@ export class SandboxManager {
   }
 
   /**
+   * Create the sandbox-side directory backing a project, if it doesn't
+   * already exist. `mkdir -p` is idempotent, so this is safe to call
+   * every time a project is created and again defensively before every
+   * chat request — cheap, and it guarantees the directory is there even if
+   * the sandbox was recreated from a snapshot that predates the project,
+   * or the background creation triggered at project-creation time hasn't
+   * finished yet.
+   *
+   * `relativePath` is the project's `path` column (e.g. "my-app"), which
+   * lives under `/workspace/<path>` inside the sandbox.
+   */
+  static async ensureProjectDirectory(
+    sandbox: InstanceType<typeof import("@vercel/sandbox").Sandbox>,
+    relativePath: string
+  ): Promise<void> {
+    await sandbox.runCommand({
+      cmd: "mkdir",
+      args: ["-p", `/workspace/${relativePath}`],
+    });
+  }
+
+  /**
    * Drop cached local state for a workspace's sandbox without calling
    * sandbox.stop(). Used when a request discovers the cached instance is
    * actually dead server-side (e.g. a 410 from the sandbox's HTTP server),

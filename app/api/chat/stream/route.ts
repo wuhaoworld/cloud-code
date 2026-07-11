@@ -98,6 +98,15 @@ export async function POST(req: NextRequest) {
       if (sandboxInstance) {
         useSandbox = true;
         sandboxBaseUrl = await SandboxManager.ensureServerRunning(project.workspaceId, sandboxInstance);
+        // Defensive: the project's directory is normally created in the
+        // background when the project is added (see POST /api/projects),
+        // but that can still be in flight, or the sandbox may have been
+        // recreated from a snapshot taken before the project existed.
+        // mkdir -p is idempotent and cheap, so just always ensure it here
+        // rather than trusting a spawn into a missing cwd (which fails with
+        // a confusing "binary exists but failed to launch" error instead of
+        // a clear ENOENT).
+        await SandboxManager.ensureProjectDirectory(sandboxInstance, project.path);
         sandboxCwd = `/workspace/${project.path}`;
         projectPath = sandboxCwd;
       } else {
