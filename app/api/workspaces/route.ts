@@ -4,7 +4,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/db";
 import { workspaces } from "@/db/schema";
 import { eq } from "drizzle-orm";
-import { v4 as uuidv4 } from "uuid";
+import { SandboxManager } from "@/lib/sandbox-manager";
 
 // GET /api/workspaces — 获取当前用户所有 workspace
 export async function GET() {
@@ -98,10 +98,17 @@ export async function POST(req: NextRequest) {
       id: cleanId,
       name: name.trim(),
       userId: session.user.id,
+      sandboxId: cleanId,
+      sandboxStatus: "starting",
       createdAt: now,
       updatedAt: now,
     })
     .returning();
+
+  // Asynchronously trigger sandbox creation and startup in the background
+  SandboxManager.getOrCreate(cleanId).catch((err) => {
+    console.error(`Failed to automatically start sandbox for workspace ${cleanId}:`, err);
+  });
 
   return NextResponse.json(workspace, { status: 201 });
 }

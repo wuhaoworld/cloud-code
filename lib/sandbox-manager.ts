@@ -130,43 +130,51 @@ export class SandboxManager {
     const Sandbox = await getSandboxClass();
     const credentials = getCredentials();
 
-    await db
-      .update(workspaces)
-      .set({ sandboxStatus: "starting" })
-      .where(eq(workspaces.id, workspaceId));
+    try {
+      await db
+        .update(workspaces)
+        .set({ sandboxStatus: "starting" })
+        .where(eq(workspaces.id, workspaceId));
 
-    // Use SDK's getOrCreate — handles both fresh creation and resume from snapshot.
-    // persistent: true (default) means Vercel auto-snapshots on timeout,
-    // and the sandbox resumes from the latest snapshot automatically.
-    // keepLastSnapshots: { count: 1 } keeps storage costs flat.
-    const sandbox = await Sandbox.getOrCreate({
-      name: workspace.sandboxId ?? undefined,
-      ...credentials,
-      runtime: "node24",
-      resources: { vcpus: 4 },
-      timeout: INITIAL_TIMEOUT_MS,
-      ports: [3001],
-      keepLastSnapshots: { count: 1 },
-      onCreate: async (sbx) => {
-        // First time: full bootstrap (upload server, npm install, start server)
-        await bootstrapSandboxServer(sbx);
-      },
-      onResume: async (sbx) => {
-        // Resumed from snapshot: server process is dead but node_modules
-        // are intact. Only restart the server if it's not already responding.
-        await restartServerIfStopped(sbx);
-      },
-    });
+      // Use SDK's getOrCreate — handles both fresh creation and resume from snapshot.
+      // persistent: true (default) means Vercel auto-snapshots on timeout,
+      // and the sandbox resumes from the latest snapshot automatically.
+      // keepLastSnapshots: { count: 1 } keeps storage costs flat.
+      const sandbox = await Sandbox.getOrCreate({
+        name: workspaceId,
+        ...credentials,
+        runtime: "node24",
+        resources: { vcpus: 4 },
+        timeout: INITIAL_TIMEOUT_MS,
+        ports: [3001],
+        keepLastSnapshots: { count: 1 },
+        onCreate: async (sbx) => {
+          // First time: full bootstrap (upload server, npm install, start server)
+          await bootstrapSandboxServer(sbx);
+        },
+        onResume: async (sbx) => {
+          // Resumed from snapshot: server process is dead but node_modules
+          // are intact. Only restart the server if it's not already responding.
+          await restartServerIfStopped(sbx);
+        },
+      });
 
-    runningInstances.set(workspaceId, sandbox);
-    startHeartbeat(workspaceId, sandbox);
+      runningInstances.set(workspaceId, sandbox);
+      startHeartbeat(workspaceId, sandbox);
 
-    await db
-      .update(workspaces)
-      .set({ sandboxId: sandbox.name, sandboxStatus: "running" })
-      .where(eq(workspaces.id, workspaceId));
+      await db
+        .update(workspaces)
+        .set({ sandboxId: sandbox.name, sandboxStatus: "running" })
+        .where(eq(workspaces.id, workspaceId));
 
-    return sandbox;
+      return sandbox;
+    } catch (err) {
+      await db
+        .update(workspaces)
+        .set({ sandboxStatus: "idle" })
+        .where(eq(workspaces.id, workspaceId));
+      throw err;
+    }
   }
 
   /**
