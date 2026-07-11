@@ -86,12 +86,16 @@ app.post("/stream", async (req: Request, res: Response) => {
     const { query } = require("@anthropic-ai/claude-agent-sdk");
 
     // Vercel Sandbox VMs boot an Amazon Linux 2023 image (glibc), not Alpine/musl.
-    // Let the SDK auto-resolve its bundled optional-dependency binary for the
-    // current platform (@anthropic-ai/claude-agent-sdk-linux-x64) instead of
-    // pointing at a hardcoded path.
+    // Explicitly point the SDK at the glibc-linked linux-x64 binary that was
+    // installed and verified by sandbox-setup.ts. Without this, the SDK's own
+    // auto-resolution logic (which walks import.meta.url to locate the optional
+    // dependency package) can pick the wrong libc variant or fail with
+    // "exists but failed to launch" even when the correct binary is on disk.
+    const CLAUDE_BIN = "/sandbox-server/node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude";
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const queryOptions: any = {
       cwd,
+      pathToClaudeCodeExecutable: CLAUDE_BIN,
       permissionMode: permissionMode ?? "default",
       enableFileCheckpointing: true,
       includePartialMessages: true,
