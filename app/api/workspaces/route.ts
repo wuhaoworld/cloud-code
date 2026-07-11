@@ -22,6 +22,25 @@ export async function GET() {
   return NextResponse.json(userWorkspaces);
 }
 
+const RESERVED_PATHS = new Set([
+  "login",
+  "admin",
+  "signout",
+  "signin",
+  "signup",
+  "sign-in",
+  "sign-up",
+  "api",
+  "chat",
+  "plugins",
+  "settings",
+  "forgot-password",
+  "reset-password",
+  "w",
+  "favicon.ico",
+  "logo.png"
+]);
+
 // POST /api/workspaces — 创建新 workspace
 export async function POST(req: NextRequest) {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -30,17 +49,53 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { name } = body;
+  const { name, id } = body;
 
   if (!name?.trim()) {
-    return NextResponse.json({ error: "name is required" }, { status: 400 });
+    return NextResponse.json({ error: "名称是必填项" }, { status: 400 });
+  }
+
+  if (!id?.trim()) {
+    return NextResponse.json({ error: "Workspace ID 是必填项" }, { status: 400 });
+  }
+
+  const cleanId = id.trim();
+
+  // 校验系统保留路径
+  if (RESERVED_PATHS.has(cleanId.toLowerCase())) {
+    return NextResponse.json(
+      { error: "该 ID 是系统保留路径，无法使用" },
+      { status: 400 }
+    );
+  }
+
+  // 校验 ID 格式：只能包含字母、数字、连字符和下划线
+  if (!/^[a-zA-Z0-9_-]+$/.test(cleanId)) {
+    return NextResponse.json(
+      { error: "Workspace ID 只能包含字母、数字、连字符和下划线" },
+      { status: 400 }
+    );
+  }
+
+  // 校验 ID 唯一性
+  const [existing] = await db
+    .select()
+    .from(workspaces)
+    .where(eq(workspaces.id, cleanId))
+    .limit(1);
+
+  if (existing) {
+    return NextResponse.json(
+      { error: "该 Workspace ID 已被占用，请尝试其他 ID" },
+      { status: 400 }
+    );
   }
 
   const now = new Date();
   const [workspace] = await db
     .insert(workspaces)
     .values({
-      id: uuidv4(),
+      id: cleanId,
       name: name.trim(),
       userId: session.user.id,
       createdAt: now,

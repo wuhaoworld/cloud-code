@@ -25,6 +25,52 @@ function parsePermissionMode(value: string | null): PermissionMode | undefined {
 
 export default function ProjectChatPage({ params }: ChatPageProps) {
   const { projectId } = use(params);
+  const router = useRouter();
+  const { projects, setProjects } = useAppStore();
+  const [loading, setLoading] = useState(true);
+
+  // Pre-load projects if they aren't in the store yet
+  useEffect(() => {
+    if (projects.length === 0) {
+      fetch("/api/projects")
+        .then((res) => {
+          if (!res.ok) throw new Error();
+          return res.json();
+        })
+        .then((data) => {
+          setProjects(data);
+        })
+        .catch(() => {
+          setTimeout(() => setLoading(false), 0);
+        });
+    }
+  }, [projects.length, setProjects]);
+
+  useEffect(() => {
+    const project = projects.find((p) => p.id === projectId);
+    if (project) {
+      if (project.workspaceId) {
+        router.replace(`/${project.workspaceId}/chat/${projectId}${window.location.search}`);
+      } else {
+        setTimeout(() => setLoading(false), 0);
+      }
+    } else if (projects.length > 0) {
+      // Project not found among user's projects
+      setTimeout(() => setLoading(false), 0);
+    }
+  }, [projects, projectId, router]);
+
+  if (loading) {
+    return (
+      <div className="flex-1 flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-2">
+          <Loader2 className="size-6 animate-spin text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">正在加载项目...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <Suspense
       fallback={
@@ -139,6 +185,7 @@ export function ChatArea({
     sessions,
     expandedProjects,
     currentSessionId,
+    currentWorkspaceId,
     messages,
     isStreaming,
     pendingPermission,
@@ -154,6 +201,7 @@ export function ChatArea({
 
   const { send, interrupt } = useAgentStream();
   const router = useRouter();
+  const routePrefix = currentWorkspaceId ? `/${currentWorkspaceId}/chat` : "/chat";
 
   const bottomRef = useRef<HTMLDivElement>(null);
   const currentProject = projects.find((p) => p.id === projectId);
@@ -275,7 +323,7 @@ export function ChatArea({
           } else {
             addSession(session);
           }
-          window.history.replaceState(null, "", `/chat/${projectId}/${newSessionId}`);
+          window.history.replaceState(null, "", `${routePrefix}/${projectId}/${newSessionId}`);
           setCurrentSession(newSessionId);
           loadedKeyRef.current = `${projectId}:${newSessionId}`;
         },
@@ -291,6 +339,7 @@ export function ChatArea({
       replaceSession,
       setCurrentSession,
       setExpandedProjects,
+      routePrefix,
     ]
   );
 
@@ -309,7 +358,7 @@ export function ChatArea({
     ) {
       initialSentRef.current = true;
       handleSend(promptParam, undefined, null, permissionModeParam);
-      window.history.replaceState(null, "", `/chat/${projectId}`);
+      window.history.replaceState(null, "", `${routePrefix}/${projectId}`);
     }
   }, [
     promptParam,
@@ -319,6 +368,7 @@ export function ChatArea({
     projects,
     isLoadingHistory,
     handleSend,
+    routePrefix,
   ]);
 
   const handleApprove = async (requestId: string, remember = false) => {
@@ -355,7 +405,7 @@ export function ChatArea({
       {/* 顶部工具栏 */}
       <header className="flex items-center gap-1 px-3 py-3 border-b border-border/60 shrink-0">
         <button
-          onClick={() => router.push(`/chat/${projectId}`)}
+          onClick={() => router.push(`${routePrefix}/${projectId}`)}
           className="text-sm text-foreground truncate rounded-sm px-1.5 py-0.5 hover:bg-muted transition-colors"
         >
           {currentProject?.name || "未选择项目"}

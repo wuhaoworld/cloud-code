@@ -1,126 +1,197 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useAppStore } from "@/store/app-store";
-import { ChatInput } from "@/components/chat/chat-input";
-import { CreateProjectDialog } from "@/components/project/create-project-dialog";
-import { Folder, FolderOpen, ChevronDown, Check, Plus } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { cn } from "@/lib/utils";
+import { useAppStore, type Workspace } from "@/store/app-store";
+import { Loader2, Sparkles } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+
+const RESERVED_PATHS = new Set([
+  "login",
+  "admin",
+  "signout",
+  "signin",
+  "signup",
+  "sign-in",
+  "sign-up",
+  "api",
+  "chat",
+  "plugins",
+  "settings",
+  "forgot-password",
+  "reset-password",
+  "w",
+  "favicon.ico",
+  "logo.png"
+]);
 
 export default function ChatPage() {
   const router = useRouter();
-  const [createOpen, setCreateOpen] = useState(false);
-  const { projects, currentProjectId, setCurrentProject } = useAppStore();
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const { setWorkspaces, addWorkspace, setCurrentWorkspace } = useAppStore();
+  const [loading, setLoading] = useState(true);
 
-  // 计算当前生效的项目 ID
-  const activeProjectId =
-    selectedProjectId ||
-    (currentProjectId && projects.some((p) => p.id === currentProjectId)
-      ? currentProjectId
-      : projects.length > 0
-      ? projects[0].id
-      : null);
+  // For onboarding form
+  const [newName, setNewName] = useState("");
+  const [newId, setNewId] = useState("");
+  const [urlPrefix] = useState(() => {
+    if (typeof window !== "undefined") {
+      return `${window.location.origin}/`;
+    }
+    return "/";
+  });
+  const [creating, setCreating] = useState(false);
 
-  const handleSelectProject = (projectId: string) => {
-    setSelectedProjectId(projectId);
-    setCurrentProject(projectId);
-  };
+  useEffect(() => {
+    async function load() {
+      try {
+        const res = await fetch("/api/workspaces");
+        if (!res.ok) {
+          setLoading(false);
+          return;
+        }
+        const data: Workspace[] = await res.json();
+        setWorkspaces(data);
 
-  const handleSend = (prompt: string) => {
-    if (!activeProjectId) {
-      toast.error("请先选择或创建一个项目");
+        if (data.length > 0) {
+          const savedId = typeof window !== "undefined"
+            ? localStorage.getItem("current-workspace-id")
+            : null;
+          const target = savedId ? data.find((w: Workspace) => w.id === savedId) : null;
+          const targetId = target ? target.id : data[0].id;
+          
+          setCurrentWorkspace(targetId);
+          router.replace(`/${targetId}/chat`);
+        } else {
+          setLoading(false);
+        }
+      } catch {
+        toast.error("加载 Workspaces 失败");
+        setLoading(false);
+      }
+    }
+    load();
+  }, [router, setWorkspaces, setCurrentWorkspace]);
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newName.trim() || !newId.trim()) return;
+
+    const cleanId = newId.trim();
+
+    if (RESERVED_PATHS.has(cleanId.toLowerCase())) {
+      toast.error("该 Workspace ID 是系统保留路径，无法使用");
       return;
     }
-    // 重定向到项目的 chat 页面，并通过 query 参数传递 prompt
-    router.push(`/chat/${activeProjectId}?prompt=${encodeURIComponent(prompt)}`);
+
+    if (!/^[a-zA-Z0-9_-]+$/.test(cleanId)) {
+      toast.error("Workspace ID 只能包含字母、数字、连字符和下划线");
+      return;
+    }
+
+    setCreating(true);
+    try {
+      const res = await fetch("/api/workspaces", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newName.trim(),
+          id: cleanId,
+        }),
+      });
+      if (!res.ok) {
+        const { error } = await res.json();
+        toast.error(error || "创建失败");
+        return;
+      }
+      const workspace = await res.json();
+      addWorkspace(workspace);
+      setCurrentWorkspace(workspace.id);
+      toast.success(`Workspace "${workspace.name}" 已创建`);
+      router.push(`/${workspace.id}/chat`);
+    } catch {
+      toast.error("网络错误，请重试");
+    } finally {
+      setCreating(false);
+    }
   };
 
-  const selectedProject = projects.find((p) => p.id === activeProjectId);
-
-  return (
-    <div className="flex-1 flex flex-col items-center justify-center h-full bg-background pb-32">
-      <div className="w-full max-w-[680px] px-6 flex flex-col items-center gap-8 animate-[fadeUp_0.35s_ease]">
-        {/* H1 标题 */}
-        <h1 className="text-[28px] font-normal dark:text-[#e8e3d8] text-[#2d2b26] text-center tracking-[-0.3px] m-0 leading-snug">
-          有什么我能帮你的吗？
-        </h1>
-
-        {/* 聊天输入框 */}
-        <div className="w-full">
-          <ChatInput
-            onSend={handleSend}
-            placeholder="询问任何事。输入 @ 使用插件或提及文件"
-            projectId={activeProjectId}
-            projectSelector={
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[12.5px] dark:text-white/55 text-black/45 dark:hover:bg-white/[0.06] hover:bg-black/[0.05] dark:hover:text-white/75 hover:text-black/65 transition-all outline-none">
-                    <FolderOpen size={13} className="opacity-65 shrink-0" />
-                    <span className="max-w-[150px] truncate">
-                      {selectedProject ? selectedProject.name : "选择项目"}
-                    </span>
-                    <ChevronDown
-                      size={11}
-                      className="opacity-50 transition-transform [[data-state=open]_&]:rotate-180"
-                    />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-56 p-1">
-                  <DropdownMenuLabel className="text-[11px] font-medium text-muted-foreground/70 px-2 py-1">
-                    切换当前项目
-                  </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  {projects.length === 0 ? (
-                    <div className="text-[12px] text-muted-foreground/60 px-3 py-2 text-center">
-                      无可用项目
-                    </div>
-                  ) : (
-                    <div className="max-h-60 overflow-y-auto space-y-0.5">
-                      {projects.map((proj) => (
-                        <DropdownMenuItem
-                          key={proj.id}
-                          onClick={() => handleSelectProject(proj.id)}
-                          className={cn(
-                            "flex items-center gap-2 px-2.5 py-1.5 rounded-md text-[13px] cursor-pointer",
-                            proj.id === activeProjectId && "bg-accent text-accent-foreground"
-                          )}
-                        >
-                          <Folder className="size-3.5 text-muted-foreground shrink-0" />
-                          <span className="truncate flex-1">{proj.name}</span>
-                          {proj.id === activeProjectId && (
-                            <Check className="size-3.5 ml-auto text-primary shrink-0" />
-                          )}
-                        </DropdownMenuItem>
-                      ))}
-                    </div>
-                  )}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() => setCreateOpen(true)}
-                    className="gap-2 px-2.5 py-1.5 rounded-md text-[13px] text-primary focus:text-primary cursor-pointer"
-                  >
-                    <Plus className="size-3.5" />
-                    新建项目
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            }
-          />
+  if (loading) {
+    return (
+      <div className="flex-1 flex items-center justify-center h-full bg-background">
+        <div className="flex flex-col items-center gap-2">
+          <Loader2 className="size-6 animate-spin text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">正在加载 Workspace...</p>
         </div>
       </div>
+    );
+  }
 
-      <CreateProjectDialog open={createOpen} onOpenChange={setCreateOpen} />
+  return (
+    <div className="flex-1 flex items-center justify-center h-full bg-background p-6">
+      <div className="w-full max-w-sm border border-border/60 bg-card rounded-xl p-6 shadow-lg space-y-6">
+        <div className="space-y-1.5 text-center">
+          <div className="size-10 rounded-lg bg-primary mx-auto flex items-center justify-center mb-2 shadow-xs">
+            <Sparkles className="size-5 text-primary-foreground animate-pulse" />
+          </div>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">欢迎使用 Cloud Claude</h1>
+          <p className="text-sm text-muted-foreground">
+            创建您的第一个 Workspace 开始探索
+          </p>
+        </div>
+
+        <form onSubmit={handleCreate} className="space-y-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="first-ws-name">名称</Label>
+            <Input
+              id="first-ws-name"
+              placeholder="My Workspace"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              autoFocus
+              required
+              disabled={creating}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="first-ws-id">Workspace ID (URL 路由)</Label>
+            <div className="flex h-9 w-full rounded-md border border-input bg-transparent shadow-xs transition-[color,box-shadow] focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50 overflow-hidden dark:bg-input/30 md:text-sm">
+              <span className="flex items-center bg-muted/50 px-3 text-muted-foreground border-r border-input select-none font-mono text-[12px] h-full whitespace-nowrap">
+                {urlPrefix || "/w/"}
+              </span>
+              <input
+                id="first-ws-id"
+                placeholder="my-workspace"
+                value={newId}
+                onChange={(e) => {
+                  const sanitized = e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, "");
+                  setNewId(sanitized);
+                }}
+                className="flex-1 min-w-0 bg-transparent px-2.5 py-1 text-base outline-none md:text-sm text-foreground placeholder:text-muted-foreground"
+                required
+                disabled={creating}
+              />
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              只能包含小写字母、数字、连字符和下划线。
+            </p>
+          </div>
+
+          <Button type="submit" className="w-full" disabled={creating || !newName.trim() || !newId.trim()}>
+            {creating ? (
+              <>
+                <Loader2 className="size-4 animate-spin mr-1.5" />
+                正在创建...
+              </>
+            ) : (
+              "创建并进入 Workspace"
+            )}
+          </Button>
+        </form>
+      </div>
     </div>
   );
 }

@@ -55,6 +55,8 @@ export function ProjectTree({ onNewSession }: ProjectTreeProps) {
     clearMessages,
   } = useAppStore();
 
+  const routePrefix = currentWorkspaceId ? `/${currentWorkspaceId}/chat` : "/chat";
+
   // 加载项目的会话列表
   const loadSessions = useCallback(
     async (projectId: string) => {
@@ -141,14 +143,14 @@ export function ProjectTree({ onNewSession }: ProjectTreeProps) {
     setCurrentProject(project.id);
     setCurrentSession(session.sessionId);
     clearMessages();
-    router.push(`/chat/${project.id}/${session.sessionId}`);
+    router.push(`${routePrefix}/${project.id}/${session.sessionId}`);
   };
 
   const handleNewSession = (project: Project) => {
     setCurrentProject(project.id);
     setCurrentSession(null);
     clearMessages();
-    router.push("/chat");
+    router.push(routePrefix);
     onNewSession?.(project.id);
   };
 
@@ -172,7 +174,7 @@ export function ProjectTree({ onNewSession }: ProjectTreeProps) {
       removeProject(projectId);
       toast.success(`项目 "${name}" 已删除`);
       if (currentProjectId === projectId) {
-        router.push("/chat");
+        router.push(routePrefix);
       }
     } catch {
       toast.error("网络错误");

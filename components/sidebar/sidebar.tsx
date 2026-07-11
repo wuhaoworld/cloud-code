@@ -21,15 +21,16 @@ export function AppSidebar() {
   const pathname = usePathname();
   const [createOpen, setCreateOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const { setCurrentProject, setCurrentSession, clearMessages } = useAppStore();
-  const isPluginsActive = pathname === "/plugins" || pathname.startsWith("/plugins/");
-  const isSettingsActive = pathname === "/chat/settings" || pathname.startsWith("/chat/settings/");
+  const { setCurrentProject, setCurrentSession, clearMessages, currentWorkspaceId } = useAppStore();
+  const isPluginsActive = pathname === "/plugins" || pathname.startsWith("/plugins/") || (currentWorkspaceId && (pathname === `/${currentWorkspaceId}/plugins` || pathname.startsWith(`/${currentWorkspaceId}/plugins/`)));
+  const isSettingsActive = pathname === "/chat/settings" || pathname.startsWith("/chat/settings/") || (currentWorkspaceId && (pathname === `/${currentWorkspaceId}/settings` || pathname.startsWith(`/${currentWorkspaceId}/settings/`)));
+  const routePrefix = currentWorkspaceId ? `/${currentWorkspaceId}/chat` : "/chat";
 
   const handleNewChat = () => {
     setCurrentProject(null);
     setCurrentSession(null);
     clearMessages();
-    router.push("/chat");
+    router.push(routePrefix);
   };
 
   return (
@@ -68,7 +69,7 @@ export function AppSidebar() {
             setCurrentProject(null);
             setCurrentSession(null);
             clearMessages();
-            router.push("/plugins");
+            router.push(currentWorkspaceId ? `/${currentWorkspaceId}/plugins` : "/plugins");
           }}
           className={cn(
             "w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md",
@@ -107,7 +108,7 @@ export function AppSidebar() {
       <div className="px-2 py-3 space-y-0.5">
         <button
           onClick={() => {
-            router.push("/chat/settings");
+            router.push(currentWorkspaceId ? `/${currentWorkspaceId}/settings` : "/chat/settings");
           }}
           className={cn(
             "w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md cursor-default",

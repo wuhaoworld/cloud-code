@@ -6,7 +6,7 @@ import { user } from "./auth-schema";
 export const workspaces = sqliteTable(
   "workspace",
   {
-    id: text("id").primaryKey(), // UUID
+    id: text("id").primaryKey(), // 全局唯一的自定义 ID / 路由 Slug
     name: text("name").notNull(), // 显示名称
     userId: text("user_id")
       .notNull()
