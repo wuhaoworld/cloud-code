@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
@@ -24,6 +23,7 @@ export function AppSidebar() {
   const [searchOpen, setSearchOpen] = useState(false);
   const { setCurrentProject, setCurrentSession, clearMessages } = useAppStore();
   const isPluginsActive = pathname === "/plugins" || pathname.startsWith("/plugins/");
+  const isSettingsActive = pathname === "/chat/settings" || pathname.startsWith("/chat/settings/");
 
   const handleNewChat = () => {
     setCurrentProject(null);
@@ -105,16 +105,20 @@ export function AppSidebar() {
 
       {/* 底部设置 + 升级 */}
       <div className="px-2 py-3 space-y-0.5">
-        <Link
-          href="/settings"
+        <button
+          onClick={() => {
+            router.push("/chat/settings");
+          }}
           className={cn(
-            "flex items-center gap-2.5 px-2.5 py-2 rounded-md cursor-default",
-            "text-sm text-foreground hover:bg-[#EBEBED] transition-colors"
+            "w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md cursor-default",
+            "text-sm text-foreground hover:bg-[#EBEBED] transition-colors",
+            isSettingsActive && "bg-[#EBEBED]"
           )}
+          id="sidebar-settings-btn"
         >
           <Settings className="size-4 text-muted-foreground" />
           设置
-        </Link>
+        </button>
 
       </div>
 

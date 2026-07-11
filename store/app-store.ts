@@ -83,7 +83,9 @@ interface AppState {
   // Actions — Workspace
   setWorkspaces: (workspaces: Workspace[]) => void;
   addWorkspace: (workspace: Workspace) => void;
+  removeWorkspace: (workspaceId: string) => void;
   setCurrentWorkspace: (workspaceId: string | null) => void;
+  updateWorkspace: (workspaceId: string, data: Partial<Workspace>) => void;
 
   // Actions — 项目
   setProjects: (projects: Project[]) => void;
@@ -140,6 +142,30 @@ export const useAppStore = create<AppState>()(
       setWorkspaces: (workspaces) => set({ workspaces }),
       addWorkspace: (workspace) =>
         set((state) => ({ workspaces: [...state.workspaces, workspace] })),
+      removeWorkspace: (workspaceId) =>
+        set((state) => {
+          const remaining = state.workspaces.filter((w) => w.id !== workspaceId);
+          // Remove projects belonging to this workspace from local state
+          const filteredProjects = state.projects.filter((p) => p.workspaceId !== workspaceId);
+          const newCurrentWorkspaceId =
+            state.currentWorkspaceId === workspaceId
+              ? (remaining[0]?.id ?? null)
+              : state.currentWorkspaceId;
+          if (typeof window !== "undefined" && newCurrentWorkspaceId) {
+            localStorage.setItem("current-workspace-id", newCurrentWorkspaceId);
+          }
+          return {
+            workspaces: remaining,
+            currentWorkspaceId: newCurrentWorkspaceId,
+            projects: filteredProjects,
+          };
+        }),
+      updateWorkspace: (workspaceId, data) =>
+        set((state) => ({
+          workspaces: state.workspaces.map((w) =>
+            w.id === workspaceId ? { ...w, ...data } : w
+          ),
+        })),
       setCurrentWorkspace: (workspaceId) => {
         if (typeof window !== "undefined" && workspaceId) {
           localStorage.setItem("current-workspace-id", workspaceId);
