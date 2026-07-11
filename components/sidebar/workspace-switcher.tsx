@@ -85,7 +85,7 @@ export function WorkspaceSwitcher() {
     return "/";
   });
   const [creating, setCreating] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => workspaces.length === 0);
 
   useEffect(() => {
     async function load() {
