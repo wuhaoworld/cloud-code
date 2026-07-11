@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ChevronsUpDown, Loader2, Plus, Sparkles, Check } from "lucide-react";
@@ -73,7 +73,7 @@ function SandboxIndicator({ status, showLabel = false }: { status: SandboxStatus
 
 export function WorkspaceSwitcher() {
   const router = useRouter();
-  const { workspaces, currentWorkspaceId, setWorkspaces, addWorkspace, setCurrentWorkspace } =
+  const { workspaces, currentWorkspaceId, setWorkspaces, addWorkspace, setCurrentWorkspace, updateWorkspace } =
     useAppStore();
   const [createOpen, setCreateOpen] = useState(false);
   const [newName, setNewName] = useState("");
@@ -122,6 +122,85 @@ export function WorkspaceSwitcher() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
+
+  const lastStartedIdRef = useRef<string | null>(null);
+
+  // Poll sandbox status of any workspace that is in a transition state ("starting" or "snapshotting")
+  useEffect(() => {
+    const intervalId = setInterval(async () => {
+      const currentWorkspaces = useAppStore.getState().workspaces;
+      const transitioning = currentWorkspaces.filter(
+        (ws) => ws.sandboxStatus === "starting" || ws.sandboxStatus === "snapshotting"
+      );
+      if (transitioning.length === 0) return;
+
+      await Promise.all(
+        transitioning.map(async (ws) => {
+          try {
+            const res = await fetch(`/api/workspaces/${ws.id}/sandbox`);
+            if (res.ok) {
+              const data = await res.json();
+              if (data.sandboxStatus && data.sandboxStatus !== ws.sandboxStatus) {
+                updateWorkspace(ws.id, { sandboxStatus: data.sandboxStatus });
+              }
+            }
+          } catch (err) {
+            console.error(`Failed to poll sandbox status for ${ws.id}:`, err);
+          }
+        })
+      );
+    }, 2000);
+
+    return () => clearInterval(intervalId);
+  }, [updateWorkspace]);
+
+  // Auto-start current workspace if not running
+  useEffect(() => {
+    if (!currentWorkspaceId || loading) return;
+
+    // If we already triggered start for this workspace id in this session/mount, don't do it again
+    if (lastStartedIdRef.current === currentWorkspaceId) return;
+
+    const ws = workspaces.find((w) => w.id === currentWorkspaceId);
+    if (!ws) return;
+
+    const syncAndStart = async () => {
+      try {
+        // First, fetch the latest synced status from the backend to ensure accurate local state
+        const res = await fetch(`/api/workspaces/${currentWorkspaceId}/sandbox`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.sandboxStatus) {
+            updateWorkspace(currentWorkspaceId, { sandboxStatus: data.sandboxStatus });
+            
+            // If the verified status is idle, trigger startup
+            if (data.sandboxStatus === "idle") {
+              lastStartedIdRef.current = currentWorkspaceId;
+              updateWorkspace(currentWorkspaceId, { sandboxStatus: "starting" });
+              const startRes = await fetch(`/api/workspaces/${currentWorkspaceId}/sandbox`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "start" }),
+              });
+              if (startRes.ok) {
+                const startData = await startRes.json();
+                if (startData.sandboxStatus) {
+                  updateWorkspace(currentWorkspaceId, { sandboxStatus: startData.sandboxStatus });
+                }
+              } else {
+                updateWorkspace(currentWorkspaceId, { sandboxStatus: "idle" });
+                lastStartedIdRef.current = null;
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Failed to sync and start sandbox:", err);
+      }
+    };
+
+    syncAndStart();
+  }, [currentWorkspaceId, loading, workspaces, updateWorkspace]);
 
   const current = workspaces.find((w) => w.id === currentWorkspaceId);
 
