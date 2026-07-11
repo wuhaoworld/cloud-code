@@ -44,27 +44,26 @@ const RESERVED_PATHS = new Set([
   "logo.png"
 ]);
 
-function SandboxIndicator({ status }: { status: SandboxStatus }) {
-  if (status === "idle") return null;
-
+function SandboxIndicator({ status }: { status: SandboxStatus | "error" }) {
   const config: Record<
-    Exclude<SandboxStatus, "idle">,
+    SandboxStatus | "error",
     { color: string; pulse: boolean; label: string }
   > = {
-    starting: { color: "bg-amber-400", pulse: true, label: "启动中" },
     running: { color: "bg-emerald-500", pulse: false, label: "运行中" },
-    snapshotting: { color: "bg-blue-400", pulse: true, label: "快照中" },
+    idle: { color: "bg-zinc-400 dark:bg-zinc-500", pulse: false, label: "已停止" },
+    starting: { color: "bg-amber-500", pulse: true, label: "启动中" },
+    snapshotting: { color: "bg-amber-500", pulse: true, label: "快照中" },
+    error: { color: "bg-red-500", pulse: false, label: "错误" },
   };
 
-  const { color, pulse, label } = config[status as Exclude<SandboxStatus, "idle">];
+  const item = config[status] || { color: "bg-zinc-400 dark:bg-zinc-500", pulse: false, label: "未知" };
 
   return (
     <span
-      className="flex items-center gap-1 text-[10px] text-muted-foreground"
-      title={`Sandbox ${label}`}
+      className="inline-flex items-center shrink-0 ml-1.5"
+      title={`Workspace ${item.label}`}
     >
-      <span className={`inline-block size-1.5 rounded-full ${color} ${pulse ? "animate-pulse" : ""}`} />
-      <span className="hidden group-hover:inline">{label}</span>
+      <span className={`inline-block size-1.5 rounded-full ${item.color} ${item.pulse ? "animate-pulse" : ""}`} />
     </span>
   );
 }
@@ -177,12 +176,14 @@ export function WorkspaceSwitcher() {
             <div className="size-6 shrink-0 rounded-md bg-primary flex items-center justify-center">
               <Sparkles className="size-3.5 text-primary-foreground" />
             </div>
-            <span className="font-semibold text-sm tracking-tight truncate flex-1 text-left">
-              {loading ? "Cloud Code" : (current?.name ?? "Cloud Code")}
-            </span>
-            {current && current.sandboxStatus !== "idle" && (
-              <SandboxIndicator status={current.sandboxStatus} />
-            )}
+            <div className="flex items-center gap-1 min-w-0 flex-1 text-left">
+              <span className="font-semibold text-sm tracking-tight truncate">
+                {loading ? "Cloud Code" : (current?.name ?? "Cloud Code")}
+              </span>
+              {!loading && current && (
+                <SandboxIndicator status={current.sandboxStatus} />
+              )}
+            </div>
             <ChevronsUpDown className="size-3.5 shrink-0 text-muted-foreground" />
           </button>
         </DropdownMenuTrigger>
@@ -200,15 +201,13 @@ export function WorkspaceSwitcher() {
               <div className="size-5 rounded shrink-0 bg-primary/10 flex items-center justify-center">
                 <Sparkles className="size-3 text-primary" />
               </div>
-              <span className="flex-1 truncate">{ws.name}</span>
-              <div className="flex items-center gap-1.5 shrink-0">
-                {ws.sandboxStatus !== "idle" && (
-                  <SandboxIndicator status={ws.sandboxStatus} />
-                )}
-                {ws.id === currentWorkspaceId && (
-                  <Check className="size-3.5 text-primary" />
-                )}
+              <div className="flex items-center gap-1 min-w-0 flex-1 text-left">
+                <span className="truncate">{ws.name}</span>
+                <SandboxIndicator status={ws.sandboxStatus} />
               </div>
+              {ws.id === currentWorkspaceId && (
+                <Check className="size-3.5 shrink-0 text-primary" />
+              )}
             </DropdownMenuItem>
           ))}
 
