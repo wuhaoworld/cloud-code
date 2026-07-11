@@ -87,6 +87,7 @@ async function resolveServerUrl(workspaceId: string): Promise<string> {
     const creds = VERCEL_TOKEN && VERCEL_TEAM_ID && VERCEL_PROJECT_ID
       ? { token: VERCEL_TOKEN, teamId: VERCEL_TEAM_ID, projectId: VERCEL_PROJECT_ID }
       : {};
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sandbox = await (Sandbox as any).get({ name: ws.sandboxId, ...creds });
     const baseUrl: string = sandbox.domain(3001);
     console.log(col("green", `   ✓ Sandbox base URL: ${baseUrl}`));

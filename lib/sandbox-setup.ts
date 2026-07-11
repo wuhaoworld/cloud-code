@@ -43,20 +43,19 @@ export async function bootstrapSandboxServer(sandbox: SandboxInstance): Promise<
   // and force a clean reinstall instead of surfacing the cryptic error.
   await installDepsWithIntegrityCheck(sandbox);
 
+  const envVars = [
+    `SANDBOX_SERVER_PORT=${SERVER_PORT}`,
+    process.env.ANTHROPIC_BASE_URL ? `ANTHROPIC_BASE_URL=${process.env.ANTHROPIC_BASE_URL}` : "",
+    process.env.ANTHROPIC_AUTH_TOKEN ? `ANTHROPIC_AUTH_TOKEN=${process.env.ANTHROPIC_AUTH_TOKEN}` : "",
+    process.env.ANTHROPIC_MODEL ? `ANTHROPIC_MODEL=${process.env.ANTHROPIC_MODEL}` : "",
+  ].filter(Boolean).join(" ");
+
   // 3. Start server in detached mode (fire-and-forget)
   await sandbox.runCommand({
-    cmd: "node",
-    args: ["dist/index.js"],
+    cmd: "sh",
+    args: ["-c", `${envVars} node dist/index.js`],
     cwd: SERVER_DIR,
     detached: true,
-    env: {
-      SANDBOX_SERVER_PORT: String(SERVER_PORT),
-      // Forward custom Anthropic endpoint credentials so the in-sandbox
-      // claude-agent-sdk process uses the correct API base URL and key.
-      ...(process.env.ANTHROPIC_BASE_URL ? { ANTHROPIC_BASE_URL: process.env.ANTHROPIC_BASE_URL } : {}),
-      ...(process.env.ANTHROPIC_AUTH_TOKEN ? { ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN } : {}),
-      ...(process.env.ANTHROPIC_MODEL ? { ANTHROPIC_MODEL: process.env.ANTHROPIC_MODEL } : {}),
-    },
   });
 
   // 4. Wait for /health to be ready

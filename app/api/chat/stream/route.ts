@@ -44,7 +44,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { projectId, prompt, sessionId, model } = body;
+  const { projectId, prompt, model } = body;
+  // Sanitise the session ID sent by the client: the frontend can send a
+  // "pending-<uuid>" optimistic placeholder when the user sends a second
+  // message before session_init arrives. That ID never exists in the DB, so
+  // passing it to the server causes a foreign-key constraint violation.
+  // Treat any "pending-" value — or a missing value — as "no existing session".
+  const sessionId =
+    typeof body.sessionId === "string" && !body.sessionId.startsWith("pending-")
+      ? body.sessionId
+      : undefined;
   const permissionMode = isPermissionMode(body.permissionMode)
     ? body.permissionMode
     : "default";
