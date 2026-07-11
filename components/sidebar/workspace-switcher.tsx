@@ -263,7 +263,7 @@ export function WorkspaceSwitcher() {
                 />
               </div>
               <p className="text-[11px] text-muted-foreground">
-                用于确定 Workspace 的专属 URL 路由，只能包含小写字母、数字、连字符和下划线。
+                只能包含小写字母、数字、连字符和下划线。
               </p>
             </div>
             <DialogFooter>
