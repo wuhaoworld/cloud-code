@@ -136,9 +136,8 @@ export default function ChatPage() {
           <div className="size-10 rounded-lg bg-primary mx-auto flex items-center justify-center mb-2 shadow-xs">
             <Sparkles className="size-5 text-primary-foreground animate-pulse" />
           </div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">欢迎使用 Cloud Claude</h1>
           <p className="text-sm text-muted-foreground">
-            创建您的第一个 Workspace 开始探索
+            创建您的第一个 Workspace
           </p>
         </div>
 
@@ -187,7 +186,7 @@ export default function ChatPage() {
                 正在创建...
               </>
             ) : (
-              "创建并进入 Workspace"
+              "创建 Workspace"
             )}
           </Button>
         </form>
