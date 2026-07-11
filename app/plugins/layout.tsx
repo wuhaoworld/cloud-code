@@ -16,9 +16,7 @@ export default async function PluginsLayout({
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
-      <div className="w-76 shrink-0 flex flex-col h-full">
-        <AppSidebar />
-      </div>
+      <AppSidebar />
 
       <main className="flex-1 flex flex-col overflow-hidden">{children}</main>
     </div>

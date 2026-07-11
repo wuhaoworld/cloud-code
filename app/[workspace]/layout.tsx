@@ -24,9 +24,7 @@ export default async function WorkspaceLayout({
       <WorkspaceSync workspaceId={workspace} />
 
       {/* 左侧侧边栏 */}
-      <div className="w-76 shrink-0 flex flex-col h-full">
-        <AppSidebar />
-      </div>
+      <AppSidebar />
 
       {/* 主内容区 */}
       <main className="flex-1 flex flex-col overflow-hidden">

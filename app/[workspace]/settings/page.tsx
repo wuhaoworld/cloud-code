@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Settings, Trash2, AlertTriangle, Loader2, Sparkles } from "lucide-react";
+import { Settings, Trash2, AlertTriangle, Loader2, Sparkles, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -160,9 +160,6 @@ function GeneralPanel() {
                 <li>对应的 Sandbox 实例</li>
                 <li>所有 Sandbox Snapshot</li>
               </ul>
-              <span className="block font-semibold text-destructive">
-                此操作无法撤销。
-              </span>
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-2">
@@ -219,12 +216,34 @@ function SandboxStatusBadge({
 // ── Page ────────────────────────────────────────────────────────────────────
 
 export default function WorkspaceSettingsPage() {
+  const router = useRouter();
+  const { currentWorkspaceId } = useAppStore();
   const [activeNav, setActiveNav] = useState("general");
 
   return (
     <div className="flex h-full">
       {/* Left nav */}
       <nav className="w-52 shrink-0 border-r border-border bg-sidebar flex flex-col py-4 px-2 gap-0.5">
+        {/* 返回按钮 */}
+        <div className="px-1.5 pb-2 mb-2 border-b border-border/40">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              if (currentWorkspaceId) {
+                router.push(`/${currentWorkspaceId}/chat`);
+              } else {
+                router.push("/chat");
+              }
+            }}
+            className="w-full justify-start text-muted-foreground hover:text-foreground flex items-center gap-2 h-8 px-2 font-normal"
+            id="settings-nav-back-btn"
+          >
+            <ArrowLeft className="size-4" />
+            <span>返回对话</span>
+          </Button>
+        </div>
+
         <p className="px-3 pb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
           Workspace 设置
         </p>
