@@ -19,6 +19,25 @@ export async function GET() {
     .where(eq(workspaces.userId, session.user.id))
     .orderBy(workspaces.createdAt);
 
+  const activeWorkspaces = userWorkspaces.filter((ws) => ws.sandboxStatus !== "idle");
+  if (activeWorkspaces.length > 0) {
+    await Promise.all(
+      activeWorkspaces.map((ws) =>
+        SandboxManager.syncRemoteStatus(ws.id).catch((err) => {
+          console.error(`Failed to sync remote status for workspace ${ws.id}:`, err);
+        })
+      )
+    );
+
+    const updatedWorkspaces = await db
+      .select()
+      .from(workspaces)
+      .where(eq(workspaces.userId, session.user.id))
+      .orderBy(workspaces.createdAt);
+
+    return NextResponse.json(updatedWorkspaces);
+  }
+
   return NextResponse.json(userWorkspaces);
 }
 

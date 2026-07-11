@@ -313,4 +313,74 @@ export class SandboxManager {
     serverUrls.delete(workspaceId);
     bootstrapPromises.delete(workspaceId);
   }
+
+  /**
+   * Checks the actual status of the sandbox remotely and syncs it to the database if it has changed.
+   * Only does remote check if the database status indicates it is active (starting, running, snapshotting).
+   */
+  static async syncRemoteStatus(workspaceId: string): Promise<string> {
+    const [workspace] = await db
+      .select({
+        id: workspaces.id,
+        sandboxStatus: workspaces.sandboxStatus,
+      })
+      .from(workspaces)
+      .where(eq(workspaces.id, workspaceId))
+      .limit(1);
+
+    if (!workspace) return "idle";
+
+    // If already marked as idle locally, we don't need to do a remote check.
+    if (workspace.sandboxStatus === "idle") {
+      return "idle";
+    }
+
+    try {
+      const Sandbox = await getSandboxClass();
+      const credentials = getCredentials();
+
+      const remoteSandbox = await Sandbox.get({
+        name: workspaceId,
+        resume: false,
+        ...credentials,
+      });
+
+      const remoteSandboxData = remoteSandbox as unknown as { sandbox?: { status?: string } };
+      const remoteStatus = remoteSandboxData.sandbox?.status;
+
+      let mappedStatus: SandboxStatus = "idle";
+      if (remoteStatus === "running") {
+        mappedStatus = "running";
+      } else if (remoteStatus === "pending") {
+        mappedStatus = "starting";
+      } else if (remoteStatus === "snapshotting" || remoteStatus === "stopping") {
+        mappedStatus = "snapshotting";
+      } else {
+        mappedStatus = "idle";
+      }
+
+      if (mappedStatus !== workspace.sandboxStatus) {
+        await db
+          .update(workspaces)
+          .set({ sandboxStatus: mappedStatus })
+          .where(eq(workspaces.id, workspaceId));
+
+        if (mappedStatus === "idle") {
+          this.invalidate(workspaceId);
+        }
+      }
+
+      return mappedStatus;
+    } catch (err) {
+      console.error(`Failed to verify sandbox remote status for workspace ${workspaceId}:`, err);
+      // If we got a 404 or any error checking the remote status, it means it is not running
+      await db
+        .update(workspaces)
+        .set({ sandboxStatus: "idle" })
+        .where(eq(workspaces.id, workspaceId));
+      this.invalidate(workspaceId);
+      return "idle";
+    }
+  }
 }
+

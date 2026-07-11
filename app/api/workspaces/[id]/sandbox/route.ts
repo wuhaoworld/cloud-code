@@ -18,6 +18,11 @@ export async function GET(
 
   const { id } = await params;
 
+  // Sync actual remote status to DB
+  await SandboxManager.syncRemoteStatus(id).catch((err) => {
+    console.error(`Failed to sync remote status for workspace ${id}:`, err);
+  });
+
   const [workspace] = await db
     .select({
       id: workspaces.id,
