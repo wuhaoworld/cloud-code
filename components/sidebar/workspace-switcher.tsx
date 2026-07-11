@@ -44,7 +44,7 @@ const RESERVED_PATHS = new Set([
   "logo.png"
 ]);
 
-function SandboxIndicator({ status }: { status: SandboxStatus | "error" }) {
+function SandboxIndicator({ status, showLabel = false }: { status: SandboxStatus | "error"; showLabel?: boolean }) {
   const config: Record<
     SandboxStatus | "error",
     { color: string; pulse: boolean; label: string }
@@ -60,10 +60,13 @@ function SandboxIndicator({ status }: { status: SandboxStatus | "error" }) {
 
   return (
     <span
-      className="inline-flex items-center shrink-0 ml-1.5"
+      className="inline-flex items-center gap-1.5 shrink-0 ml-1.5"
       title={`Workspace ${item.label}`}
     >
       <span className={`inline-block size-1.5 rounded-full ${item.color} ${item.pulse ? "animate-pulse" : ""}`} />
+      {showLabel && (
+        <span className="text-[11px] text-muted-foreground">{item.label}</span>
+      )}
     </span>
   );
 }
@@ -188,7 +191,7 @@ export function WorkspaceSwitcher() {
           </button>
         </DropdownMenuTrigger>
 
-        <DropdownMenuContent align="start" className="w-56">
+        <DropdownMenuContent align="start" className="w-64">
           {workspaces.map((ws) => (
             <DropdownMenuItem
               key={ws.id}
@@ -196,18 +199,20 @@ export function WorkspaceSwitcher() {
                 setCurrentWorkspace(ws.id);
                 router.push(`/${ws.id}/chat`);
               }}
-              className="flex items-center gap-2"
+              className="flex items-center justify-between gap-2"
             >
-              <div className="size-5 rounded shrink-0 bg-primary/10 flex items-center justify-center">
-                <Sparkles className="size-3 text-primary" />
+              <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                <div className="size-5 rounded shrink-0 bg-primary/10 flex items-center justify-center">
+                  <Sparkles className="size-3 text-primary" />
+                </div>
+                <span className="truncate font-medium">{ws.name}</span>
+                {ws.id === currentWorkspaceId && (
+                  <Check className="size-3.5 text-primary shrink-0" />
+                )}
               </div>
-              <div className="flex items-center gap-1 min-w-0 flex-1 text-left">
-                <span className="truncate">{ws.name}</span>
-                <SandboxIndicator status={ws.sandboxStatus} />
+              <div className="flex items-center gap-2 shrink-0 ml-auto">
+                <SandboxIndicator status={ws.sandboxStatus} showLabel />
               </div>
-              {ws.id === currentWorkspaceId && (
-                <Check className="size-3.5 shrink-0 text-primary" />
-              )}
             </DropdownMenuItem>
           ))}
 
