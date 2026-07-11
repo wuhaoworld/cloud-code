@@ -38,7 +38,7 @@ function parseArgs() {
   }
 
   parsed.prompt ??= "请列出当前工作目录下的所有文件（ls -la），并简要说明项目结构。";
-  return parsed;
+  return parsed as { workspaceId: string; prompt: string };
 }
 
 // ── SSE 解析 ──────────────────────────────────────────────────────────────────
