@@ -261,7 +261,7 @@ async function bundleWithEsbuild(): Promise<Buffer> {
     target: "node20",
     format: "cjs",
     write: false,
-    external: ["@anthropic-ai/claude-agent-sdk"],
+    external: ["@anthropic-ai/claude-agent-sdk", "express", "uuid"],
   });
   return Buffer.from(result.outputFiles[0].contents);
 }
