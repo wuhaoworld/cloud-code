@@ -143,23 +143,25 @@ function GeneralPanel() {
               <AlertTriangle className="size-5" />
               确认删除 Workspace
             </DialogTitle>
-            <DialogDescription className="pt-1 space-y-2">
-              <span className="block">
-                你即将删除 Workspace{" "}
-                <span className="font-semibold text-foreground">
-                  &ldquo;{currentWorkspace?.name}&rdquo;
+            <DialogDescription asChild>
+              <div className="pt-1 space-y-2">
+                <span className="block">
+                  你即将删除 Workspace{" "}
+                  <span className="font-semibold text-foreground">
+                    &ldquo;{currentWorkspace?.name}&rdquo;
+                  </span>
+                  。
                 </span>
-                。
-              </span>
-              <span className="block text-destructive/80 font-medium">
-                此操作将永久删除：
-              </span>
-              <ul className="list-disc list-inside space-y-1 text-sm">
-                <li>所有关联项目</li>
-                <li>所有聊天记录</li>
-                <li>对应的 Sandbox 实例</li>
-                <li>所有 Sandbox Snapshot</li>
-              </ul>
+                <span className="block text-destructive/80 font-medium">
+                  此操作将永久删除：
+                </span>
+                <ul className="list-disc list-inside space-y-1 text-sm">
+                  <li>所有关联项目</li>
+                  <li>所有聊天记录</li>
+                  <li>对应的 Sandbox 实例</li>
+                  <li>所有 Sandbox Snapshot</li>
+                </ul>
+              </div>
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2 sm:gap-2">
