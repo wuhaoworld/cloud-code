@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { usePathname, useRouter, useParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   FolderPlus,
@@ -19,9 +19,21 @@ import { useAppStore } from "@/store/app-store";
 export function AppSidebar() {
   const router = useRouter();
   const pathname = usePathname();
+  const params = useParams();
+  const workspaceId = params?.workspace as string | undefined;
   const [createOpen, setCreateOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const { setCurrentProject, setCurrentSession, clearMessages, currentWorkspaceId } = useAppStore();
+  const {
+    setCurrentProject,
+    setCurrentSession,
+    clearMessages,
+    currentWorkspaceId,
+    setCurrentWorkspace,
+  } = useAppStore();
+
+  useEffect(() => {
+    setCurrentWorkspace(workspaceId || null);
+  }, [workspaceId, setCurrentWorkspace]);
   const isPluginsActive = pathname === "/plugins" || pathname.startsWith("/plugins/") || (currentWorkspaceId && (pathname === `/${currentWorkspaceId}/plugins` || pathname.startsWith(`/${currentWorkspaceId}/plugins/`)));
   const isSettingsActive = pathname === "/chat/settings" || pathname.startsWith("/chat/settings/") || (currentWorkspaceId && (pathname === `/${currentWorkspaceId}/settings` || pathname.startsWith(`/${currentWorkspaceId}/settings/`)));
   const routePrefix = currentWorkspaceId ? `/${currentWorkspaceId}/chat` : "/chat";

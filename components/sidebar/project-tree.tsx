@@ -73,63 +73,72 @@ export function ProjectTree({ onNewSession }: ProjectTreeProps) {
   );
 
   // 加载项目列表
-  const loadProjects = useCallback(async () => {
-    try {
-      const url = currentWorkspaceId
-        ? `/api/projects?workspaceId=${currentWorkspaceId}`
-        : "/api/projects";
-      const res = await fetch(url);
-      if (!res.ok) return;
-      const data = await res.json();
-      setProjects(data);
+  useEffect(() => {
+    let active = true;
 
-      if (Array.isArray(data) && data.length > 0) {
-        let expandedIds: string[] = [];
-        let hasRecord = false;
-        if (typeof window !== "undefined") {
-          const stored = localStorage.getItem("expanded-projects");
-          if (stored !== null) {
-            try {
-              expandedIds = JSON.parse(stored);
-              hasRecord = true;
-            } catch {
-              /* ignore */
+    async function loadProjects() {
+      try {
+        const url = currentWorkspaceId
+          ? `/api/projects?workspaceId=${currentWorkspaceId}`
+          : "/api/projects";
+        const res = await fetch(url);
+        if (!res.ok) return;
+        const data = await res.json();
+
+        if (!active) return;
+        setProjects(data);
+
+        if (Array.isArray(data) && data.length > 0) {
+          let expandedIds: string[] = [];
+          let hasRecord = false;
+          if (typeof window !== "undefined") {
+            const stored = localStorage.getItem("expanded-projects");
+            if (stored !== null) {
+              try {
+                expandedIds = JSON.parse(stored);
+                hasRecord = true;
+              } catch {
+                /* ignore */
+              }
             }
           }
-        }
 
-        if (!hasRecord) {
-          // 如果没有记录，默认只展开第一个项目
-          expandedIds = [data[0].id];
-        }
-
-        // 仅保留属于当前项目的有效 ID
-        const validExpandedIds = expandedIds.filter((id) =>
-          data.some((p: Project) => p.id === id)
-        );
-
-        if (!hasRecord || validExpandedIds.length !== expandedIds.length) {
-          if (typeof window !== "undefined") {
-            localStorage.setItem("expanded-projects", JSON.stringify(validExpandedIds));
+          if (!hasRecord) {
+            // 如果没有记录，默认只展开第一个项目
+            expandedIds = [data[0].id];
           }
+
+          // 仅保留属于当前项目的有效 ID
+          const validExpandedIds = expandedIds.filter((id) =>
+            data.some((p: Project) => p.id === id)
+          );
+
+          if (!hasRecord || validExpandedIds.length !== expandedIds.length) {
+            if (typeof window !== "undefined") {
+              localStorage.setItem("expanded-projects", JSON.stringify(validExpandedIds));
+            }
+          }
+
+          if (!active) return;
+          setExpandedProjects(validExpandedIds);
+          // 并行加载已被展开项目的会话列表
+          await Promise.all(
+            data
+              .filter((p: Project) => validExpandedIds.includes(p.id))
+              .map((p: Project) => loadSessions(p.id))
+          );
         }
-
-        setExpandedProjects(validExpandedIds);
-        // 并行加载已被展开项目的会话列表
-        await Promise.all(
-          data
-            .filter((p: Project) => validExpandedIds.includes(p.id))
-            .map((p: Project) => loadSessions(p.id))
-        );
+      } catch {
+        /* ignore */
       }
-    } catch {
-      /* ignore */
     }
-  }, [setProjects, setExpandedProjects, loadSessions, currentWorkspaceId]);
 
-  useEffect(() => {
     loadProjects();
-  }, [loadProjects]);
+
+    return () => {
+      active = false;
+    };
+  }, [currentWorkspaceId, loadSessions, setProjects, setExpandedProjects]);
 
   const handleToggleProject = async (project: Project) => {
     toggleProjectExpanded(project.id);

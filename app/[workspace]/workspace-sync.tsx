@@ -4,14 +4,14 @@ import { useEffect } from "react";
 import { useAppStore } from "@/store/app-store";
 
 export function WorkspaceSync({ workspaceId }: { workspaceId: string }) {
-  const { currentWorkspaceId, setCurrentWorkspace, workspaces, setWorkspaces } = useAppStore();
+  const { setCurrentWorkspace, workspaces, setWorkspaces } = useAppStore();
 
   // Sync workspace ID to application state store
   useEffect(() => {
-    if (workspaceId && currentWorkspaceId !== workspaceId) {
+    if (workspaceId) {
       setCurrentWorkspace(workspaceId);
     }
-  }, [workspaceId, currentWorkspaceId, setCurrentWorkspace]);
+  }, [workspaceId, setCurrentWorkspace]);
 
   // Pre-load workspaces list if empty
   useEffect(() => {

@@ -170,7 +170,16 @@ export const useAppStore = create<AppState>()(
         if (typeof window !== "undefined" && workspaceId) {
           localStorage.setItem("current-workspace-id", workspaceId);
         }
-        set({ currentWorkspaceId: workspaceId });
+        set((state) => {
+          if (state.currentWorkspaceId === workspaceId) return {};
+          return {
+            currentWorkspaceId: workspaceId,
+            projects: [],
+            sessions: {},
+            currentProjectId: null,
+            currentSessionId: null,
+          };
+        });
       },
 
       // Project actions
