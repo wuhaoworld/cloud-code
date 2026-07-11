@@ -315,6 +315,14 @@ export async function POST(req: NextRequest) {
           permissionMode,
           enableFileCheckpointing: true,
           includePartialMessages: true,
+          // Spread process.env first so PATH and other inherited vars are preserved;
+          // then overlay the custom Anthropic endpoint / key / model defaults.
+          env: {
+            ...process.env,
+            ...(process.env.ANTHROPIC_BASE_URL ? { ANTHROPIC_BASE_URL: process.env.ANTHROPIC_BASE_URL } : {}),
+            ...(process.env.ANTHROPIC_AUTH_TOKEN ? { ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN } : {}),
+            ...(process.env.ANTHROPIC_MODEL && !model ? { ANTHROPIC_MODEL: process.env.ANTHROPIC_MODEL } : {}),
+          },
           ...(model ? { model } : {}),
           canUseTool: async (
             toolName: string,

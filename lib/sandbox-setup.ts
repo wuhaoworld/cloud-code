@@ -49,7 +49,14 @@ export async function bootstrapSandboxServer(sandbox: SandboxInstance): Promise<
     args: ["dist/index.js"],
     cwd: SERVER_DIR,
     detached: true,
-    env: { SANDBOX_SERVER_PORT: String(SERVER_PORT) },
+    env: {
+      SANDBOX_SERVER_PORT: String(SERVER_PORT),
+      // Forward custom Anthropic endpoint credentials so the in-sandbox
+      // claude-agent-sdk process uses the correct API base URL and key.
+      ...(process.env.ANTHROPIC_BASE_URL ? { ANTHROPIC_BASE_URL: process.env.ANTHROPIC_BASE_URL } : {}),
+      ...(process.env.ANTHROPIC_AUTH_TOKEN ? { ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN } : {}),
+      ...(process.env.ANTHROPIC_MODEL ? { ANTHROPIC_MODEL: process.env.ANTHROPIC_MODEL } : {}),
+    },
   });
 
   // 4. Wait for /health to be ready

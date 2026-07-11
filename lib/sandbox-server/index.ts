@@ -95,6 +95,16 @@ app.post("/stream", async (req: Request, res: Response) => {
       permissionMode: permissionMode ?? "default",
       enableFileCheckpointing: true,
       includePartialMessages: true,
+      // Forward custom Anthropic endpoint / key / model from the process environment
+      // (injected by sandbox-setup.ts when the server is started).
+      // Spreading process.env preserves PATH and other required vars inherited by
+      // the claude subprocess.
+      env: {
+        ...process.env,
+        ...(process.env.ANTHROPIC_BASE_URL ? { ANTHROPIC_BASE_URL: process.env.ANTHROPIC_BASE_URL } : {}),
+        ...(process.env.ANTHROPIC_AUTH_TOKEN ? { ANTHROPIC_AUTH_TOKEN: process.env.ANTHROPIC_AUTH_TOKEN } : {}),
+        ...(process.env.ANTHROPIC_MODEL && !model ? { ANTHROPIC_MODEL: process.env.ANTHROPIC_MODEL } : {}),
+      },
       ...(model ? { model } : {}),
       canUseTool: async (
         toolName: string,
