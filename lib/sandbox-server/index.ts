@@ -14,6 +14,39 @@ import { v4 as uuidv4 } from "uuid";
 const app = express();
 app.use(express.json());
 
+// ---------------------------------------------------------------------------
+// Bearer token authentication
+// ---------------------------------------------------------------------------
+// SANDBOX_SECRET_TOKEN is injected by sandbox-setup.ts at server start time.
+// If unset (local dev without the env var), we log a warning and skip auth.
+const SANDBOX_SECRET_TOKEN = process.env.SANDBOX_SECRET_TOKEN ?? "";
+if (!SANDBOX_SECRET_TOKEN) {
+  process.stderr.write(
+    "[sandbox-server] WARNING: SANDBOX_SECRET_TOKEN is not set — all endpoints are unauthenticated!\n"
+  );
+}
+
+// Middleware: require Authorization: Bearer <token> on all routes except /health.
+app.use((req: Request, res: Response, next: import("express").NextFunction) => {
+  // /health is exempt — it's the startup probe called before the token is known
+  if (req.path === "/health") {
+    next();
+    return;
+  }
+  // If no token is configured, skip verification (dev fallback)
+  if (!SANDBOX_SECRET_TOKEN) {
+    next();
+    return;
+  }
+  const authHeader = req.headers["authorization"] ?? "";
+  const provided = authHeader.startsWith("Bearer ") ? authHeader.slice(7) : "";
+  if (provided !== SANDBOX_SECRET_TOKEN) {
+    res.status(401).json({ error: "Unauthorized" });
+    return;
+  }
+  next();
+});
+
 // requestId → resolve callback
 const pendingPermissions = new Map<
   string,

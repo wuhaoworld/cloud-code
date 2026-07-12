@@ -10,6 +10,8 @@ export interface SandboxApprovalEntry {
   workspaceId: string;
   /** The user who owns this session — checked in /api/chat/approve to prevent IDOR */
   userId: string;
+  /** Bearer token to authenticate the forwarded /approve request to the sandbox server */
+  token: string;
 }
 
 // requestId → sandbox connection info

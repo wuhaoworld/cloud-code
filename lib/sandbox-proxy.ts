@@ -23,6 +23,8 @@ export { pendingSandboxApprovals } from "./sandbox-approvals";
 
 export interface SandboxStreamOptions {
   sandboxBaseUrl: string;
+  /** Bearer token to authenticate requests to the sandbox HTTP server */
+  sandboxToken: string;
   projectId: string;
   prompt: string;
   cwd: string;
@@ -53,6 +55,7 @@ export async function sandboxStreamProxy(
 ): Promise<{ sessionId: string | undefined; assistantBlocks: Block[] }> {
   const {
     sandboxBaseUrl,
+    sandboxToken,
     prompt,
     cwd,
     sessionId,
@@ -64,7 +67,10 @@ export async function sandboxStreamProxy(
 
   const res = await fetch(`${sandboxBaseUrl}/stream`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(sandboxToken ? { Authorization: `Bearer ${sandboxToken}` } : {}),
+    },
     body: JSON.stringify({ prompt, cwd, sessionId, model, permissionMode }),
     signal,
   });
@@ -123,6 +129,7 @@ export async function sandboxStreamProxy(
           sandboxBaseUrl,
           workspaceId,
           userId,
+          token: sandboxToken,
         });
         continue;
       }

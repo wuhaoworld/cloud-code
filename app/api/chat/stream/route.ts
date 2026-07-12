@@ -102,6 +102,7 @@ export async function POST(req: NextRequest) {
   let projectPath: string;
   let useSandbox = false;
   let sandboxBaseUrl = "";
+  let sandboxToken = "";
   let sandboxCwd = "";
 
   if (project.workspaceId) {
@@ -120,7 +121,10 @@ export async function POST(req: NextRequest) {
       const sandboxInstance = SandboxManager.getRunningInstance(project.workspaceId);
       if (sandboxInstance) {
         useSandbox = true;
-        sandboxBaseUrl = await SandboxManager.ensureServerRunning(project.workspaceId, sandboxInstance);
+        ({ baseUrl: sandboxBaseUrl, token: sandboxToken } = await SandboxManager.ensureServerRunning(
+          project.workspaceId,
+          sandboxInstance
+        ));
         // Defensive: the project's directory is normally created in the
         // background when the project is added (see POST /api/projects),
         // but that can still be in flight, or the sandbox may have been
@@ -243,6 +247,7 @@ export async function POST(req: NextRequest) {
             sandboxResult = await sandboxStreamProxy(
               {
                 sandboxBaseUrl,
+                sandboxToken,
                 projectId,
                 prompt,
                 cwd: sandboxCwd,
@@ -274,7 +279,8 @@ export async function POST(req: NextRequest) {
             const freshBaseUrl = await SandboxManager.ensureServerRunning(project.workspaceId!, freshInstance);
             sandboxResult = await sandboxStreamProxy(
               {
-                sandboxBaseUrl: freshBaseUrl,
+                sandboxBaseUrl: freshBaseUrl.baseUrl,
+                sandboxToken: freshBaseUrl.token,
                 projectId,
                 prompt,
                 cwd: sandboxCwd,

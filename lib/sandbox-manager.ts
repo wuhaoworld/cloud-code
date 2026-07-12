@@ -39,13 +39,17 @@ const runningInstances = new Map<string, InstanceType<typeof import("@vercel/san
 // workspaceId → base URL of the in-sandbox HTTP server
 const serverUrls = new Map<string, string>();
 
+// workspaceId → bearer token for authenticating requests to the in-sandbox HTTP server.
+// Stored alongside serverUrls so the caller can pass it with every /stream and /approve call.
+const serverTokens = new Map<string, string>();
+
 // workspaceId → in-flight bootstrap promise. Without this, concurrent calls
 // to ensureServerRunning() for the same workspace (e.g. two near-simultaneous
 // requests, or multiple serverless instances in production) would each see a
 // cache miss and independently run `npm install` against the same
 // node_modules directory in the sandbox, risking a corrupted/truncated
 // native binary write.
-const bootstrapPromises = new Map<string, Promise<string>>();
+const bootstrapPromises = new Map<string, Promise<{ baseUrl: string; token: string }>>();
 
 // workspaceId → timestamp of last observed activity (chat request, etc).
 const lastActivity = new Map<string, number>();
@@ -205,14 +209,15 @@ export class SandboxManager {
   }
 
   /**
-   * Ensure the in-sandbox HTTP server is running. Returns the base URL.
+   * Ensure the in-sandbox HTTP server is running. Returns the base URL and
+   * the bearer token required to authenticate requests against it.
    * Uploads the server bundle, installs deps, and starts the server if needed.
-   * Caches the base URL per workspace so re-calls are cheap.
+   * Caches both values per workspace so re-calls are cheap.
    */
   static async ensureServerRunning(
     workspaceId: string,
     sandbox: InstanceType<typeof import("@vercel/sandbox").Sandbox>
-  ): Promise<string> {
+  ): Promise<{ baseUrl: string; token: string }> {
     const cached = serverUrls.get(workspaceId);
     if (cached) {
       // Verify the cached server is still alive — after a sandbox
@@ -220,11 +225,15 @@ export class SandboxManager {
       // we have a cached URL from before the timeout.
       try {
         const res = await fetch(`${cached}/health`, { signal: AbortSignal.timeout(3_000) });
-        if (res.ok) return cached;
+        if (res.ok) {
+          const token = serverTokens.get(workspaceId) ?? "";
+          return { baseUrl: cached, token };
+        }
       } catch {
         // Server is dead — fall through to re-bootstrap
       }
       serverUrls.delete(workspaceId);
+      serverTokens.delete(workspaceId);
     }
 
     // Deduplicate concurrent bootstrap calls for the same workspace so only
@@ -233,9 +242,10 @@ export class SandboxManager {
     if (inFlight) return inFlight;
 
     const promise = bootstrapSandboxServer(sandbox)
-      .then((baseUrl) => {
+      .then(({ baseUrl, token }) => {
         serverUrls.set(workspaceId, baseUrl);
-        return baseUrl;
+        serverTokens.set(workspaceId, token);
+        return { baseUrl, token };
       })
       .finally(() => {
         bootstrapPromises.delete(workspaceId);
@@ -267,6 +277,7 @@ export class SandboxManager {
       stopHeartbeat(workspaceId);
       runningInstances.delete(workspaceId);
       serverUrls.delete(workspaceId);
+      serverTokens.delete(workspaceId);
       bootstrapPromises.delete(workspaceId);
       await db
         .update(workspaces)
@@ -292,6 +303,7 @@ export class SandboxManager {
     lastActivity.delete(workspaceId);
     runningInstances.delete(workspaceId);
     serverUrls.delete(workspaceId);
+    serverTokens.delete(workspaceId);
     bootstrapPromises.delete(workspaceId);
     await sandbox.stop();
 
@@ -338,6 +350,7 @@ export class SandboxManager {
     stopHeartbeat(workspaceId);
     runningInstances.delete(workspaceId);
     serverUrls.delete(workspaceId);
+    serverTokens.delete(workspaceId);
     bootstrapPromises.delete(workspaceId);
   }
 

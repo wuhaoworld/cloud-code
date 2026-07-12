@@ -52,7 +52,10 @@ export async function POST(req: NextRequest) {
     try {
       await fetch(`${sandboxEntry.sandboxBaseUrl}/approve`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(sandboxEntry.token ? { Authorization: `Bearer ${sandboxEntry.token}` } : {}),
+        },
         body: JSON.stringify({
           requestId,
           behavior,

@@ -11,6 +11,7 @@
 
 import path from "path";
 import fs from "fs";
+import { randomUUID } from "crypto";
 import { Writable } from "stream";
 
 type SandboxInstance = InstanceType<typeof import("@vercel/sandbox").Sandbox>;
@@ -28,9 +29,11 @@ const MAX_INSTALL_ATTEMPTS = 2;
 /**
  * Install dependencies and start the HTTP server inside the sandbox.
  * Idempotent — safe to call if server is already running.
- * Returns the public HTTPS base URL for the server.
+ * Returns the public HTTPS base URL and the shared secret token for the server.
  */
-export async function bootstrapSandboxServer(sandbox: SandboxInstance): Promise<string> {
+export async function bootstrapSandboxServer(
+  sandbox: SandboxInstance
+): Promise<{ baseUrl: string; token: string }> {
   // 1. Upload server bundle
   await uploadServerBundle(sandbox);
 
@@ -43,8 +46,14 @@ export async function bootstrapSandboxServer(sandbox: SandboxInstance): Promise<
   // and force a clean reinstall instead of surfacing the cryptic error.
   await installDepsWithIntegrityCheck(sandbox);
 
+  // Generate a fresh per-session secret token that gates access to /stream and /approve.
+  // A new token is created on every bootstrap (cold start or post-snapshot restart)
+  // so leaked tokens from previous sessions can't be reused.
+  const token = randomUUID();
+
   const envVars = [
     `SANDBOX_SERVER_PORT=${SERVER_PORT}`,
+    `SANDBOX_SECRET_TOKEN=${token}`,
     process.env.ANTHROPIC_BASE_URL ? `ANTHROPIC_BASE_URL=${process.env.ANTHROPIC_BASE_URL}` : "",
     process.env.ANTHROPIC_AUTH_TOKEN ? `ANTHROPIC_AUTH_TOKEN=${process.env.ANTHROPIC_AUTH_TOKEN}` : "",
     process.env.ANTHROPIC_MODEL ? `ANTHROPIC_MODEL=${process.env.ANTHROPIC_MODEL}` : "",
@@ -61,7 +70,7 @@ export async function bootstrapSandboxServer(sandbox: SandboxInstance): Promise<
   // 4. Wait for /health to be ready
   const baseUrl = sandbox.domain(SERVER_PORT);
   await waitForHealth(`${baseUrl}/health`);
-  return baseUrl;
+  return { baseUrl, token };
 }
 
 /**
@@ -270,14 +279,24 @@ async function bundleWithEsbuild(): Promise<Buffer> {
  * Restart the in-sandbox server if it's not already running.
  * Checks /health first — skips the full bootstrap if the server is already alive.
  * Used in the onResume callback after a sandbox is restored from snapshot.
+ *
+ * NOTE: Because the server process is restarted with a new SANDBOX_SECRET_TOKEN
+ * on every resume, the caller must update its cached token.
  */
-export async function restartServerIfStopped(sandbox: SandboxInstance): Promise<string> {
+export async function restartServerIfStopped(
+  sandbox: SandboxInstance
+): Promise<{ baseUrl: string; token: string }> {
   const baseUrl = sandbox.domain(SERVER_PORT);
 
   // Quick health check — if the server survived the resume, skip bootstrap
   try {
     const res = await fetch(`${baseUrl}/health`, { signal: AbortSignal.timeout(3_000) });
-    if (res.ok) return baseUrl;
+    if (res.ok) {
+      // Server is still alive. We can't recover the original token from a
+      // running process, so do a full re-bootstrap to get a fresh token.
+      // This path is rare (server surviving a VM resume), and the bootstrap
+      // skips npm install when the binary is already functional.
+    }
   } catch {
     // Not running, proceed with bootstrap
   }

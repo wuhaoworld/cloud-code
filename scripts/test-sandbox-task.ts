@@ -252,7 +252,7 @@ async function main() {
 
   let baseUrl: string;
   try {
-    baseUrl = await SandboxManager.ensureServerRunning(workspaceId, sandbox);
+    ({ baseUrl } = await SandboxManager.ensureServerRunning(workspaceId, sandbox));
   } catch (err) {
     console.error(colorize("red", `\n❌ Sandbox Server 启动失败:`));
     console.error(err);
