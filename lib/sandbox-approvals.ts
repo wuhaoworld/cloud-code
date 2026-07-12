@@ -12,3 +12,17 @@ export interface SandboxApprovalEntry {
 
 // requestId → sandbox connection info
 export const pendingSandboxApprovals = new Map<string, SandboxApprovalEntry>();
+
+// Auto-evict after 10 minutes so abandoned requests (stream abort, sandbox
+// timeout, user ignoring the prompt) don't accumulate indefinitely.
+const APPROVAL_TTL_MS = 10 * 60 * 1000;
+
+export function registerSandboxApproval(
+  requestId: string,
+  entry: SandboxApprovalEntry
+): void {
+  pendingSandboxApprovals.set(requestId, entry);
+  setTimeout(() => {
+    pendingSandboxApprovals.delete(requestId);
+  }, APPROVAL_TTL_MS);
+}

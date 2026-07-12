@@ -47,15 +47,19 @@ export async function DELETE(
   }
 
   // ── 1. Cleanup Vercel Sandbox (best-effort) ──────────────────────────────
+  // IMPORTANT: sandbox name is always equal to workspace.id (see sandbox-manager.ts
+  // getOrCreate: `name: workspaceId`). Do NOT rely on workspace.sandboxId here —
+  // SandboxManager.stop() sets it to null before this route is called, causing
+  // sandbox.delete() to be skipped and leaving snapshots permanently billable.
   const Sandbox = await getSandboxClass();
-  if (Sandbox && workspace.sandboxId) {
+  if (Sandbox) {
     try {
       const credentials = getCredentials();
-      const sandbox = await Sandbox.get({ name: workspace.sandboxId, ...credentials });
+      const sandbox = await Sandbox.get({ name: id, ...credentials });
       // sandbox.delete() permanently removes the sandbox and all its snapshots
       await sandbox.delete();
     } catch (err) {
-      // If sandbox is already gone, that's fine — continue with DB cleanup
+      // If sandbox is already gone (404 or never existed), that's fine — continue
       console.warn(`[workspace delete] sandbox cleanup failed (continuing):`, err);
     }
   }

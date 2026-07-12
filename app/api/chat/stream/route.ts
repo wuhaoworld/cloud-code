@@ -9,6 +9,7 @@ import type { Block } from "@/store/types";
 import { isPermissionMode } from "@/lib/permission-mode";
 import {
   getAllowedSessionPermissionUpdates,
+  clearSessionPermissionUpdates,
   pendingPermissions,
   toPermissionResult,
 } from "@/lib/pending-permissions";
@@ -154,6 +155,10 @@ export async function POST(req: NextRequest) {
           .orderBy(chatMessages.sortOrder);
         return rows.length > 0 ? rows[rows.length - 1].sortOrder + 1 : 0;
       };
+
+      // Tracks the current session's permission key for cleanup in finally.
+      // Only populated in the Direct branch; undefined in the Sandbox branch.
+      let activeSessionPermissionKey: string | undefined;
 
       try {
         // ── Sandbox branch ──────────────────────────────────────────────────
@@ -326,6 +331,8 @@ export async function POST(req: NextRequest) {
 
         const getSessionPermissionKey = () =>
           `${session.user.id}:${projectId}:${newSessionId ?? sessionId ?? userMsgId}`;
+        // Expose to the outer finally block for cleanup
+        activeSessionPermissionKey = getSessionPermissionKey();
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const queryOptions: any = {
@@ -653,6 +660,9 @@ export async function POST(req: NextRequest) {
         const errMsg = error instanceof Error ? error.message : "Unknown error";
         emit("error", { message: errMsg });
       } finally {
+        // Clean up per-session permission rules so the Map doesn't grow indefinitely.
+        // The TTL in pending-permissions.ts is a safety net; this is the primary cleanup.
+        clearSessionPermissionUpdates(activeSessionPermissionKey);
         controller.close();
       }
     },

@@ -15,7 +15,7 @@
  * non-sandbox stream route emits, keeping the client protocol identical.
  */
 
-import { pendingSandboxApprovals } from "./sandbox-approvals";
+import { pendingSandboxApprovals, registerSandboxApproval } from "./sandbox-approvals";
 import type { Block } from "@/store/types";
 
 // Re-export so the stream route has a single import point
@@ -114,8 +114,9 @@ export async function sandboxStreamProxy(
       if (eventType === "permission_request") {
         // Add workspaceId so the approve route knows which sandbox to forward to
         emit("permission_request", { ...data, workspaceId });
-        // Register pending so approve route can call us back
-        pendingSandboxApprovals.set(data.requestId as string, {
+        // Register pending so approve route can call us back (auto-evicted after
+        // 10 minutes to prevent leaks from abandoned/timed-out requests).
+        registerSandboxApproval(data.requestId as string, {
           sandboxBaseUrl,
           workspaceId,
         });
