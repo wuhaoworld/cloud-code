@@ -177,13 +177,19 @@ export class SandboxManager {
         ports: [3001],
         keepLastSnapshots: { count: 1 },
         onCreate: async (sbx) => {
-          // First time: full bootstrap (upload server, npm install, start server)
-          await bootstrapSandboxServer(sbx);
+          // First time: full bootstrap (upload server, npm install, start server).
+          // Store the result immediately so ensureServerRunning() finds a cache hit
+          // and returns the correct token instead of re-bootstrapping with a new one.
+          const { baseUrl, token } = await bootstrapSandboxServer(sbx);
+          serverUrls.set(workspaceId, baseUrl);
+          serverTokens.set(workspaceId, token);
         },
         onResume: async (sbx) => {
           // Resumed from snapshot: server process is dead but node_modules
-          // are intact. Only restart the server if it's not already responding.
-          await restartServerIfStopped(sbx);
+          // are intact. Restart the server and cache the new token.
+          const { baseUrl, token } = await restartServerIfStopped(sbx);
+          serverUrls.set(workspaceId, baseUrl);
+          serverTokens.set(workspaceId, token);
         },
       });
 
