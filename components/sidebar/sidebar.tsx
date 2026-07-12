@@ -15,8 +15,14 @@ import { SearchPanel } from "@/components/sidebar/search-panel";
 import { CreateProjectDialog } from "@/components/project/create-project-dialog";
 import { WorkspaceSwitcher } from "@/components/sidebar/workspace-switcher";
 import { useAppStore } from "@/store/app-store";
+import type { Project, ProjectSession } from "@/store/app-store";
 
-export function AppSidebar() {
+interface AppSidebarProps {
+  initialProjects?: Project[];
+  initialSessions?: Record<string, ProjectSession[]>;
+}
+
+export function AppSidebar({ initialProjects, initialSessions }: AppSidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useParams();
@@ -34,8 +40,9 @@ export function AppSidebar() {
   useEffect(() => {
     setCurrentWorkspace(workspaceId || null);
   }, [workspaceId, setCurrentWorkspace]);
-  const isPluginsActive = pathname === "/plugins" || pathname.startsWith("/plugins/") || (currentWorkspaceId && (pathname === `/${currentWorkspaceId}/plugins` || pathname.startsWith(`/${currentWorkspaceId}/plugins/`)));
-  const isSettingsActive = pathname === "/chat/settings" || pathname.startsWith("/chat/settings/") || (currentWorkspaceId && (pathname === `/${currentWorkspaceId}/settings` || pathname.startsWith(`/${currentWorkspaceId}/settings/`)));
+
+  const isPluginsActive = currentWorkspaceId && (pathname === `/${currentWorkspaceId}/plugins` || pathname.startsWith(`/${currentWorkspaceId}/plugins/`));
+  const isSettingsActive = currentWorkspaceId && (pathname === `/${currentWorkspaceId}/settings` || pathname.startsWith(`/${currentWorkspaceId}/settings/`));
   const routePrefix = currentWorkspaceId ? `/${currentWorkspaceId}/chat` : "/chat";
 
   const handleNewChat = () => {
@@ -85,7 +92,7 @@ export function AppSidebar() {
               setCurrentProject(null);
               setCurrentSession(null);
               clearMessages();
-              router.push(currentWorkspaceId ? `/${currentWorkspaceId}/plugins` : "/plugins");
+              router.push(currentWorkspaceId ? `/${currentWorkspaceId}/plugins` : "/chat");
             }}
             className={cn(
               "w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md",
@@ -116,15 +123,19 @@ export function AppSidebar() {
           </div>
 
           <div className="flex-1 overflow-y-auto scrollbar-thin px-1">
-            <ProjectTree onNewSession={() => {}} />
+            <ProjectTree
+              onNewSession={() => {}}
+              initialProjects={initialProjects}
+              initialSessions={initialSessions}
+            />
           </div>
         </div>
 
-        {/* 底部设置 + 升级 */}
+        {/* 底部设置 */}
         <div className="px-2 py-3 space-y-0.5">
           <button
             onClick={() => {
-              router.push(currentWorkspaceId ? `/${currentWorkspaceId}/settings` : "/chat/settings");
+              router.push(currentWorkspaceId ? `/${currentWorkspaceId}/settings` : "/chat");
             }}
             className={cn(
               "w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md cursor-default",

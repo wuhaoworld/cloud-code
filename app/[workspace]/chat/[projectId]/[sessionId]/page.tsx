@@ -1,7 +1,7 @@
 "use client";
 
 import { use, Suspense } from "react";
-import { ChatArea } from "@/app/chat/[projectId]/page";
+import { ChatArea } from "@/components/chat/chat-area";
 import { Loader2 } from "lucide-react";
 
 interface WorkspaceSessionChatPageProps {

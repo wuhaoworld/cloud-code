@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useCallback, useState } from "react";
+import { useEffect, useCallback, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
@@ -34,9 +34,11 @@ import { toast } from "sonner";
 
 interface ProjectTreeProps {
   onNewSession?: (projectId: string) => void;
+  initialProjects?: Project[];
+  initialSessions?: Record<string, ProjectSession[]>;
 }
 
-export function ProjectTree({ onNewSession }: ProjectTreeProps) {
+export function ProjectTree({ onNewSession, initialProjects, initialSessions }: ProjectTreeProps) {
   const router = useRouter();
   const {
     projects,
@@ -72,73 +74,97 @@ export function ProjectTree({ onNewSession }: ProjectTreeProps) {
     [setSessions]
   );
 
-  // 加载项目列表
+  // 首次 mount：注入服务端预取数据（如果有）
+  const initializedRef = useRef<string | null>(null);
   useEffect(() => {
-    let active = true;
+    // 只在 workspaceId 变化时重新初始化
+    if (initializedRef.current === currentWorkspaceId) return;
+    initializedRef.current = currentWorkspaceId;
 
-    async function loadProjects() {
-      try {
-        const url = currentWorkspaceId
-          ? `/api/projects?workspaceId=${currentWorkspaceId}`
-          : "/api/projects";
-        const res = await fetch(url);
-        if (!res.ok) return;
-        const data = await res.json();
+    if (initialProjects && initialProjects.length > 0 && projects.length === 0) {
+      // 服务端预取数据可用，直接写入 store
+      setProjects(initialProjects);
 
-        if (!active) return;
-        setProjects(data);
-
-        if (Array.isArray(data) && data.length > 0) {
-          let expandedIds: string[] = [];
-          let hasRecord = false;
-          if (typeof window !== "undefined") {
-            const stored = localStorage.getItem("expanded-projects");
-            if (stored !== null) {
-              try {
-                expandedIds = JSON.parse(stored);
-                hasRecord = true;
-              } catch {
-                /* ignore */
-              }
-            }
-          }
-
-          if (!hasRecord) {
-            // 如果没有记录，默认只展开第一个项目
-            expandedIds = [data[0].id];
-          }
-
-          // 仅保留属于当前项目的有效 ID
-          const validExpandedIds = expandedIds.filter((id) =>
-            data.some((p: Project) => p.id === id)
-          );
-
-          if (!hasRecord || validExpandedIds.length !== expandedIds.length) {
-            if (typeof window !== "undefined") {
-              localStorage.setItem("expanded-projects", JSON.stringify(validExpandedIds));
-            }
-          }
-
-          if (!active) return;
-          setExpandedProjects(validExpandedIds);
-          // 并行加载已被展开项目的会话列表
-          await Promise.all(
-            data
-              .filter((p: Project) => validExpandedIds.includes(p.id))
-              .map((p: Project) => loadSessions(p.id))
-          );
+      // 确定需要展开的项目
+      let expandedIds: string[] = [];
+      let hasRecord = false;
+      if (typeof window !== "undefined") {
+        const stored = localStorage.getItem("expanded-projects");
+        if (stored !== null) {
+          try {
+            expandedIds = JSON.parse(stored);
+            hasRecord = true;
+          } catch { /* ignore */ }
         }
-      } catch {
-        /* ignore */
       }
+      if (!hasRecord) {
+        expandedIds = [initialProjects[0].id];
+      }
+      const validIds = expandedIds.filter((id) => initialProjects.some((p) => p.id === id));
+      setExpandedProjects(validIds);
+
+      // 注入预取的 sessions
+      if (initialSessions) {
+        Object.entries(initialSessions).forEach(([projectId, sessions]) => {
+          setSessions(projectId, sessions);
+        });
+      }
+
+      // 尚未预取 sessions 的已展开项目，补充拉取
+      const missingIds = validIds.filter((id) => !initialSessions?.[id]);
+      if (missingIds.length > 0) {
+        Promise.all(missingIds.map((id) => loadSessions(id))).catch(() => {});
+      }
+      return;
     }
 
+    // 无预取数据或 store 已有数据时，从服务端拉取
+    if (projects.length > 0) return; // store 中已有数据（如 WorkspaceSync 注入了），跳过
     loadProjects();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentWorkspaceId]);
 
-    return () => {
-      active = false;
-    };
-  }, [currentWorkspaceId, loadSessions, setProjects, setExpandedProjects]);
+  async function loadProjects() {
+    try {
+      const url = currentWorkspaceId
+        ? `/api/projects?workspaceId=${currentWorkspaceId}`
+        : "/api/projects";
+      const res = await fetch(url);
+      if (!res.ok) return;
+      const data = await res.json();
+
+      setProjects(data);
+
+      if (Array.isArray(data) && data.length > 0) {
+        let expandedIds: string[] = [];
+        let hasRecord = false;
+        if (typeof window !== "undefined") {
+          const stored = localStorage.getItem("expanded-projects");
+          if (stored !== null) {
+            try {
+              expandedIds = JSON.parse(stored);
+              hasRecord = true;
+            } catch { /* ignore */ }
+          }
+        }
+        if (!hasRecord) {
+          expandedIds = [data[0].id];
+        }
+        const validExpandedIds = expandedIds.filter((id) => data.some((p: Project) => p.id === id));
+        if (!hasRecord || validExpandedIds.length !== expandedIds.length) {
+          if (typeof window !== "undefined") {
+            localStorage.setItem("expanded-projects", JSON.stringify(validExpandedIds));
+          }
+        }
+        setExpandedProjects(validExpandedIds);
+        await Promise.all(
+          data
+            .filter((p: Project) => validExpandedIds.includes(p.id))
+            .map((p: Project) => loadSessions(p.id))
+        );
+      }
+    } catch { /* ignore */ }
+  }
 
   const handleToggleProject = async (project: Project) => {
     toggleProjectExpanded(project.id);

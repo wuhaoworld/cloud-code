@@ -1,6 +1,6 @@
 "use client";
 
-import { use, useCallback, useEffect, useRef, useState, Suspense } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAppStore } from "@/store/app-store";
 import type { Message, Block } from "@/store/types";
 import { MessageBubble } from "@/components/chat/message-bubble";
@@ -15,73 +15,8 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { SessionActionsMenu } from "@/components/session-actions-menu";
 import { v4 as uuidv4 } from "uuid";
 
-interface ChatPageProps {
-  params: Promise<{ projectId: string }>;
-}
-
 function parsePermissionMode(value: string | null): PermissionMode | undefined {
   return isPermissionMode(value) ? value : undefined;
-}
-
-export default function ProjectChatPage({ params }: ChatPageProps) {
-  const { projectId } = use(params);
-  const router = useRouter();
-  const { projects, setProjects } = useAppStore();
-  const [loading, setLoading] = useState(true);
-
-  // Pre-load projects if they aren't in the store yet
-  useEffect(() => {
-    if (projects.length === 0) {
-      fetch("/api/projects")
-        .then((res) => {
-          if (!res.ok) throw new Error();
-          return res.json();
-        })
-        .then((data) => {
-          setProjects(data);
-        })
-        .catch(() => {
-          setTimeout(() => setLoading(false), 0);
-        });
-    }
-  }, [projects.length, setProjects]);
-
-  useEffect(() => {
-    const project = projects.find((p) => p.id === projectId);
-    if (project) {
-      if (project.workspaceId) {
-        router.replace(`/${project.workspaceId}/chat/${projectId}${window.location.search}`);
-      } else {
-        setTimeout(() => setLoading(false), 0);
-      }
-    } else if (projects.length > 0) {
-      // Project not found among user's projects
-      setTimeout(() => setLoading(false), 0);
-    }
-  }, [projects, projectId, router]);
-
-  if (loading) {
-    return (
-      <div className="flex-1 flex items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-2">
-          <Loader2 className="size-6 animate-spin text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">正在加载项目...</p>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <Suspense
-      fallback={
-        <div className="flex-1 flex items-center justify-center">
-          <Loader2 className="size-6 animate-spin text-muted-foreground" />
-        </div>
-      }
-    >
-      <ChatArea projectId={projectId} sessionId={undefined} />
-    </Suspense>
-  );
 }
 
 // 将 DB 行还原为新的 Message/Block 格式

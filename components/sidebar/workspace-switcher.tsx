@@ -73,7 +73,7 @@ function SandboxIndicator({ status, showLabel = false }: { status: SandboxStatus
 
 export function WorkspaceSwitcher() {
   const router = useRouter();
-  const { workspaces, currentWorkspaceId, setWorkspaces, addWorkspace, setCurrentWorkspace, updateWorkspace } =
+  const { workspaces, currentWorkspaceId, addWorkspace, setCurrentWorkspace, updateWorkspace } =
     useAppStore();
   const [createOpen, setCreateOpen] = useState(false);
   const [newName, setNewName] = useState("");
@@ -85,43 +85,6 @@ export function WorkspaceSwitcher() {
     return "/";
   });
   const [creating, setCreating] = useState(false);
-  const [loading, setLoading] = useState(() => workspaces.length === 0);
-
-  useEffect(() => {
-    async function load() {
-      try {
-        const res = await fetch("/api/workspaces");
-        if (!res.ok) return;
-        const data: Workspace[] = await res.json();
-        setWorkspaces(data);
-
-        // If path already contains /[workspaceId]/chat, that is handled by WorkspaceSync.
-        // Otherwise, load last saved workspace from localStorage.
-        const pathMatch = window.location.pathname.match(/^\/([^/]+)/);
-        const matchedSlug = pathMatch ? pathMatch[1] : null;
-        const urlWorkspaceId = (matchedSlug && !RESERVED_PATHS.has(matchedSlug.toLowerCase())) ? matchedSlug : null;
-
-        const savedId = urlWorkspaceId || (typeof window !== "undefined"
-          ? localStorage.getItem("current-workspace-id")
-          : null);
-
-        if (data.length > 0) {
-          const target = savedId ? data.find((w) => w.id === savedId) : null;
-          const targetId = target ? target.id : data[0].id;
-          setCurrentWorkspace(targetId);
-          
-          // If we are on /chat without a workspace prefix, redirect to the workspace route
-          if (window.location.pathname === "/chat" || window.location.pathname === "/chat/") {
-            router.replace(`/${targetId}/chat`);
-          }
-        }
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router]);
 
   const lastStartedIdRef = useRef<string | null>(null);
 
@@ -156,7 +119,7 @@ export function WorkspaceSwitcher() {
 
   // Auto-start current workspace if not running
   useEffect(() => {
-    if (!currentWorkspaceId || loading) return;
+    if (!currentWorkspaceId) return;
 
     // If we already triggered start for this workspace id in this session/mount, don't do it again
     if (lastStartedIdRef.current === currentWorkspaceId) return;
@@ -200,7 +163,7 @@ export function WorkspaceSwitcher() {
     };
 
     syncAndStart();
-  }, [currentWorkspaceId, loading, workspaces, updateWorkspace]);
+  }, [currentWorkspaceId, workspaces, updateWorkspace]);
 
   const current = workspaces.find((w) => w.id === currentWorkspaceId);
 
@@ -260,9 +223,9 @@ export function WorkspaceSwitcher() {
             </div>
             <div className="flex items-center gap-1 min-w-0 flex-1 text-left">
               <span className="font-semibold text-sm tracking-tight truncate">
-                {loading ? "Cloud Code" : (current?.name ?? "Cloud Code")}
+                {current?.name ?? "Cloud Code"}
               </span>
-              {!loading && current && (
+              {current && (
                 <SandboxIndicator status={current.sandboxStatus} />
               )}
             </div>
