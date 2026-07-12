@@ -64,15 +64,18 @@ export async function bootstrapSandboxServer(
   //    multi-instance deployments): without this, the old process keeps running
   //    with its old token, waitForHealth gets a response from it, and we hand
   //    back a token that no live server will accept → 401 on every request.
+  //
+  //    IMPORTANT: kill by PORT, not by process name. `pkill -f "node dist/index.js"`
+  //    would also match the `sh -c` process whose argv contains that string,
+  //    causing the sh process itself to be killed (exit 143 / SIGTERM).
+  //    `fuser -k <port>/tcp` only targets whatever is listening on that port.
   await sandbox.runCommand({
     cmd: "sh",
     args: [
       "-c",
-      // pkill by the exact command string; lsof/fuser as fallback.
-      // Both are idempotent — safe to run even if nothing is listening.
-      `pkill -f "node dist/index.js" 2>/dev/null; ` +
-        `lsof -ti:${SERVER_PORT} 2>/dev/null | xargs kill -9 2>/dev/null; ` +
-        `sleep 0.5; true`,
+      // fuser -k sends SIGKILL to the process listening on the port.
+      // Idempotent: exits 1 (suppressed) if nothing is listening — that's fine.
+      `fuser -k ${SERVER_PORT}/tcp 2>/dev/null; sleep 0.3; true`,
     ],
   });
 
@@ -84,7 +87,7 @@ export async function bootstrapSandboxServer(
     detached: true,
   });
 
-  // 4. Wait for /health to be ready
+  // 5. Wait for /health to be ready
   const baseUrl = sandbox.domain(SERVER_PORT);
   await waitForHealth(`${baseUrl}/health`);
   return { baseUrl, token };
