@@ -47,8 +47,7 @@ export async function bootstrapSandboxServer(
   await installDepsWithIntegrityCheck(sandbox);
 
   // Generate a fresh per-session secret token that gates access to /stream and /approve.
-  // A new token is created on every bootstrap (cold start or post-snapshot restart)
-  // so leaked tokens from previous sessions can't be reused.
+  // A new token is created on every bootstrap so leaked tokens can't be reused.
   const token = randomUUID();
 
   const envVars = [
@@ -59,7 +58,25 @@ export async function bootstrapSandboxServer(
     process.env.ANTHROPIC_MODEL ? `ANTHROPIC_MODEL=${process.env.ANTHROPIC_MODEL}` : "",
   ].filter(Boolean).join(" ");
 
-  // 3. Start server in detached mode (fire-and-forget)
+  // 3. Kill any existing server process so the NEW process (with the NEW token)
+  //    is guaranteed to be the one that answers /health.
+  //    This is critical when in-memory token state is lost (Next.js hot reload,
+  //    multi-instance deployments): without this, the old process keeps running
+  //    with its old token, waitForHealth gets a response from it, and we hand
+  //    back a token that no live server will accept → 401 on every request.
+  await sandbox.runCommand({
+    cmd: "sh",
+    args: [
+      "-c",
+      // pkill by the exact command string; lsof/fuser as fallback.
+      // Both are idempotent — safe to run even if nothing is listening.
+      `pkill -f "node dist/index.js" 2>/dev/null; ` +
+        `lsof -ti:${SERVER_PORT} 2>/dev/null | xargs kill -9 2>/dev/null; ` +
+        `sleep 0.5; true`,
+    ],
+  });
+
+  // 4. Start the new server in detached mode (fire-and-forget)
   await sandbox.runCommand({
     cmd: "sh",
     args: ["-c", `${envVars} node dist/index.js`],
