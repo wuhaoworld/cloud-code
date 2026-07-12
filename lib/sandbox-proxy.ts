@@ -32,6 +32,8 @@ export interface SandboxStreamOptions {
   userMsgId: string;
   assistantMsgId: string;
   workspaceId: string;
+  /** The authenticated user — stored with approval entries to prevent IDOR */
+  userId: string;
 }
 
 type EmitFn = (eventType: string, data: Record<string, unknown>) => void;
@@ -57,6 +59,7 @@ export async function sandboxStreamProxy(
     model,
     permissionMode,
     workspaceId,
+    userId,
   } = opts;
 
   const res = await fetch(`${sandboxBaseUrl}/stream`, {
@@ -119,6 +122,7 @@ export async function sandboxStreamProxy(
         registerSandboxApproval(data.requestId as string, {
           sandboxBaseUrl,
           workspaceId,
+          userId,
         });
         continue;
       }

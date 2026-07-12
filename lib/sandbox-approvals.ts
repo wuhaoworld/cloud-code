@@ -8,6 +8,8 @@
 export interface SandboxApprovalEntry {
   sandboxBaseUrl: string;
   workspaceId: string;
+  /** The user who owns this session — checked in /api/chat/approve to prevent IDOR */
+  userId: string;
 }
 
 // requestId → sandbox connection info

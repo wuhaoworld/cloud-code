@@ -77,6 +77,28 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
   }
 
+  // Verify that the session being resumed belongs to this project.
+  // Without this check, an attacker can supply a sessionId from another
+  // project (or another user) to cross-contaminate AI context.
+  if (sessionId) {
+    const [sessionRow] = await db
+      .select({ sessionId: projectSessions.sessionId })
+      .from(projectSessions)
+      .where(
+        and(
+          eq(projectSessions.sessionId, sessionId),
+          eq(projectSessions.projectId, projectId)
+        )
+      )
+      .limit(1);
+    if (!sessionRow) {
+      return NextResponse.json(
+        { error: "Session not found or does not belong to this project" },
+        { status: 404 }
+      );
+    }
+  }
+
   let projectPath: string;
   let useSandbox = false;
   let sandboxBaseUrl = "";
@@ -230,6 +252,7 @@ export async function POST(req: NextRequest) {
                 userMsgId,
                 assistantMsgId,
                 workspaceId: project.workspaceId!,
+                userId: session.user.id,
               },
               wrappedEmit,
               req.signal
@@ -261,6 +284,7 @@ export async function POST(req: NextRequest) {
                 userMsgId,
                 assistantMsgId,
                 workspaceId: project.workspaceId!,
+                userId: session.user.id,
               },
               wrappedEmit,
               req.signal
