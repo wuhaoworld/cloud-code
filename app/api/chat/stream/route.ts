@@ -263,12 +263,14 @@ export async function POST(req: NextRequest) {
               req.signal
             );
           } catch (err) {
-            // The sandbox may have been auto-stopped (Vercel returns 410 once
-            // its timeout elapses). Drop the stale cached reference and retry
-            // once against a freshly reconnected/recreated sandbox instead of
-            // surfacing the error straight to the user.
+            // The sandbox may have been auto-stopped (410) or the in-sandbox
+            // HTTP server restarted with a new token (401). Drop the stale
+            // cached reference and retry once against a freshly reconnected/
+            // recreated sandbox instead of surfacing the error to the user.
             const message = err instanceof Error ? err.message : "";
-            const isStaleSandbox = message.includes("Sandbox server error 410");
+            const isStaleSandbox =
+              message.includes("Sandbox server error 410") ||
+              message.includes("Sandbox server error 401");
             if (!isStaleSandbox) throw err;
 
             SandboxManager.invalidate(project.workspaceId!);

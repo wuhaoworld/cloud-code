@@ -131,6 +131,11 @@ function startHeartbeat(
 /**
  * Ensure the sandbox session has at least `targetMs` remaining timeout.
  * If the current remaining time is less than `targetMs`, we extend it by the difference.
+ *
+ * Vercel imposes a plan-level maximum execution timeout (e.g. 1 hour on Pro).
+ * If the requested extension would exceed that cap, the API returns a 400 with
+ * code `sandbox_timeout_invalid`. We silently accept this — the sandbox is
+ * already as long-lived as the plan allows.
  */
 async function ensureTargetTimeout(
   sandbox: InstanceType<typeof import("@vercel/sandbox").Sandbox>,
@@ -140,15 +145,26 @@ async function ensureTargetTimeout(
     const expiresAt = sandbox.expiresAt;
     if (expiresAt) {
       const remainingMs = expiresAt.getTime() - Date.now();
-      if (remainingMs < targetMs) {
-        const extension = targetMs - remainingMs;
-        await sandbox.extendTimeout(extension);
+      if (remainingMs >= targetMs) {
+        // Already has enough time remaining — nothing to do.
+        return;
       }
+      const extension = targetMs - remainingMs;
+      await sandbox.extendTimeout(extension);
     } else {
       await sandbox.extendTimeout(targetMs);
     }
-  } catch (err) {
-    console.error("Failed to extend sandbox timeout:", err);
+  } catch (err: unknown) {
+    // Vercel returns 400 sandbox_timeout_invalid when the extension would
+    // exceed the plan's maximum execution timeout. This is not actionable —
+    // the sandbox is already as extended as it can be.
+    const isMaxTimeout =
+      err instanceof Error &&
+      (err.message.includes("sandbox_timeout_invalid") ||
+        err.message.includes("exceed maximum execution timeout"));
+    if (!isMaxTimeout) {
+      console.error("Failed to extend sandbox timeout:", err);
+    }
   }
 }
 
