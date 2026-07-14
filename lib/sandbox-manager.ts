@@ -255,16 +255,25 @@ export class SandboxManager {
       runningInstances.set(workspaceId, sandbox);
       startHeartbeat(workspaceId, sandbox);
 
+      const token = serverTokens.get(workspaceId);
+      const url = serverUrls.get(workspaceId);
+      const updateData: Partial<typeof workspaces.$inferInsert> = {
+        sandboxId: sandbox.name,
+        sandboxStatus: "running",
+      };
+      if (token) updateData.sandboxToken = token;
+      if (url) updateData.sandboxUrl = url;
+
       await db
         .update(workspaces)
-        .set({ sandboxId: sandbox.name, sandboxStatus: "running" })
+        .set(updateData)
         .where(eq(workspaces.id, workspaceId));
 
       return sandbox;
     } catch (err) {
       await db
         .update(workspaces)
-        .set({ sandboxStatus: "idle" })
+        .set({ sandboxStatus: "idle", sandboxToken: null, sandboxUrl: null })
         .where(eq(workspaces.id, workspaceId));
       throw err;
     }
@@ -292,10 +301,34 @@ export class SandboxManager {
           return { baseUrl: cached, token };
         }
       } catch {
-        // Server is dead — fall through to re-bootstrap
+        // Server is dead — fall through to database check or re-bootstrap
       }
       serverUrls.delete(workspaceId);
       serverTokens.delete(workspaceId);
+    }
+
+    // Check database for existing token/url before bootstrapping
+    try {
+      const [workspace] = await db
+        .select({
+          sandboxToken: workspaces.sandboxToken,
+          sandboxUrl: workspaces.sandboxUrl,
+        })
+        .from(workspaces)
+        .where(eq(workspaces.id, workspaceId))
+        .limit(1);
+
+      if (workspace?.sandboxUrl && workspace?.sandboxToken) {
+        const res = await fetch(`${workspace.sandboxUrl}/health`, { signal: AbortSignal.timeout(3_000) });
+        if (res.ok) {
+          // Token is valid and server is running, cache in memory and return
+          serverUrls.set(workspaceId, workspace.sandboxUrl);
+          serverTokens.set(workspaceId, workspace.sandboxToken);
+          return { baseUrl: workspace.sandboxUrl, token: workspace.sandboxToken };
+        }
+      }
+    } catch (err) {
+      console.error("Failed to query/ping persisted sandbox server credentials:", err);
     }
 
     // Deduplicate concurrent bootstrap calls for the same workspace so only
@@ -304,9 +337,14 @@ export class SandboxManager {
     if (inFlight) return inFlight;
 
     const promise = bootstrapSandboxServer(sandbox)
-      .then(({ baseUrl, token }) => {
+      .then(async ({ baseUrl, token }) => {
         serverUrls.set(workspaceId, baseUrl);
         serverTokens.set(workspaceId, token);
+        // Persist the new credentials to the database
+        await db
+          .update(workspaces)
+          .set({ sandboxToken: token, sandboxUrl: baseUrl })
+          .where(eq(workspaces.id, workspaceId));
         return { baseUrl, token };
       })
       .finally(() => {
@@ -343,7 +381,12 @@ export class SandboxManager {
       bootstrapPromises.delete(workspaceId);
       await db
         .update(workspaces)
-        .set({ sandboxSnapshotId: snap.snapshotId, sandboxStatus: "idle" })
+        .set({
+          sandboxSnapshotId: snap.snapshotId,
+          sandboxStatus: "idle",
+          sandboxToken: null,
+          sandboxUrl: null,
+        })
         .where(eq(workspaces.id, workspaceId));
     } catch (err) {
       await db
@@ -371,7 +414,12 @@ export class SandboxManager {
 
     await db
       .update(workspaces)
-      .set({ sandboxId: null, sandboxStatus: "idle" })
+      .set({
+        sandboxId: null,
+        sandboxStatus: "idle",
+        sandboxToken: null,
+        sandboxUrl: null,
+      })
       .where(eq(workspaces.id, workspaceId));
   }
 
@@ -414,6 +462,10 @@ export class SandboxManager {
     serverUrls.delete(workspaceId);
     serverTokens.delete(workspaceId);
     bootstrapPromises.delete(workspaceId);
+    db.update(workspaces)
+      .set({ sandboxToken: null, sandboxUrl: null })
+      .where(eq(workspaces.id, workspaceId))
+      .catch((err) => console.error("Failed to clear sandbox db state during invalidate:", err));
   }
 
   /**

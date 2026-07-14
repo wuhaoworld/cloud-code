@@ -74,6 +74,48 @@ export function ProjectTree({ onNewSession, initialProjects, initialSessions }: 
     [setSessions]
   );
 
+  async function loadProjects() {
+    try {
+      const url = currentWorkspaceId
+        ? `/api/projects?workspaceId=${currentWorkspaceId}`
+        : "/api/projects";
+      const res = await fetch(url);
+      if (!res.ok) return;
+      const data = await res.json();
+
+      setProjects(data);
+
+      if (Array.isArray(data) && data.length > 0) {
+        let expandedIds: string[] = [];
+        let hasRecord = false;
+        if (typeof window !== "undefined") {
+          const stored = localStorage.getItem("expanded-projects");
+          if (stored !== null) {
+            try {
+              expandedIds = JSON.parse(stored);
+              hasRecord = true;
+            } catch { /* ignore */ }
+          }
+        }
+        if (!hasRecord) {
+          expandedIds = [data[0].id];
+        }
+        const validExpandedIds = expandedIds.filter((id) => data.some((p: Project) => p.id === id));
+        if (!hasRecord || validExpandedIds.length !== expandedIds.length) {
+          if (typeof window !== "undefined") {
+            localStorage.setItem("expanded-projects", JSON.stringify(validExpandedIds));
+          }
+        }
+        setExpandedProjects(validExpandedIds);
+        await Promise.all(
+          data
+            .filter((p: Project) => validExpandedIds.includes(p.id))
+            .map((p: Project) => loadSessions(p.id))
+        );
+      }
+    } catch { /* ignore */ }
+  }
+
   // 首次 mount：注入服务端预取数据（如果有）
   const initializedRef = useRef<string | null>(null);
   useEffect(() => {
@@ -124,47 +166,7 @@ export function ProjectTree({ onNewSession, initialProjects, initialSessions }: 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentWorkspaceId]);
 
-  async function loadProjects() {
-    try {
-      const url = currentWorkspaceId
-        ? `/api/projects?workspaceId=${currentWorkspaceId}`
-        : "/api/projects";
-      const res = await fetch(url);
-      if (!res.ok) return;
-      const data = await res.json();
 
-      setProjects(data);
-
-      if (Array.isArray(data) && data.length > 0) {
-        let expandedIds: string[] = [];
-        let hasRecord = false;
-        if (typeof window !== "undefined") {
-          const stored = localStorage.getItem("expanded-projects");
-          if (stored !== null) {
-            try {
-              expandedIds = JSON.parse(stored);
-              hasRecord = true;
-            } catch { /* ignore */ }
-          }
-        }
-        if (!hasRecord) {
-          expandedIds = [data[0].id];
-        }
-        const validExpandedIds = expandedIds.filter((id) => data.some((p: Project) => p.id === id));
-        if (!hasRecord || validExpandedIds.length !== expandedIds.length) {
-          if (typeof window !== "undefined") {
-            localStorage.setItem("expanded-projects", JSON.stringify(validExpandedIds));
-          }
-        }
-        setExpandedProjects(validExpandedIds);
-        await Promise.all(
-          data
-            .filter((p: Project) => validExpandedIds.includes(p.id))
-            .map((p: Project) => loadSessions(p.id))
-        );
-      }
-    } catch { /* ignore */ }
-  }
 
   const handleToggleProject = async (project: Project) => {
     toggleProjectExpanded(project.id);

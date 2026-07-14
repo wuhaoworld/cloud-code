@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
+import { db } from "@/db";
+import { workspaces } from "@/db/schema";
+import { eq, and } from "drizzle-orm";
 import {
   addSessionPermissionUpdates,
   createSessionPermissionUpdate,
@@ -16,9 +19,10 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { requestId, action } = body as {
+  const { requestId, action, workspaceId } = body as {
     requestId: string;
     action: string;
+    workspaceId?: string;
   };
 
   if (!requestId || !action) {
@@ -41,20 +45,51 @@ export async function POST(req: NextRequest) {
   const validatedAction = action as ValidAction;
 
   // ── Sandbox path: forward decision to the in-sandbox HTTP server ──────────
+  let sandboxBaseUrl = "";
+  let sandboxToken = "";
+
+  if (workspaceId) {
+    // 1. Verify workspace ownership and retrieve credentials from DB
+    const [workspace] = await db
+      .select({
+        userId: workspaces.userId,
+        sandboxToken: workspaces.sandboxToken,
+        sandboxUrl: workspaces.sandboxUrl,
+      })
+      .from(workspaces)
+      .where(and(eq(workspaces.id, workspaceId), eq(workspaces.userId, session.user.id)))
+      .limit(1);
+
+    if (workspace) {
+      if (workspace.sandboxUrl && workspace.sandboxToken) {
+        sandboxBaseUrl = workspace.sandboxUrl;
+        sandboxToken = workspace.sandboxToken;
+      }
+    } else {
+      return NextResponse.json({ error: "Workspace not found or access denied" }, { status: 403 });
+    }
+  }
+
+  // Fallback to in-memory registration if not resolved via workspaceId
   const sandboxEntry = pendingSandboxApprovals.get(requestId);
-  if (sandboxEntry) {
+  if (sandboxEntry && !sandboxBaseUrl) {
     // IDOR check: only the user who owns the session may approve/deny it.
     if (sandboxEntry.userId !== session.user.id) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
+    sandboxBaseUrl = sandboxEntry.sandboxBaseUrl;
+    sandboxToken = sandboxEntry.token;
     pendingSandboxApprovals.delete(requestId);
+  }
+
+  if (sandboxBaseUrl) {
     const behavior = validatedAction === "deny" ? "deny" : "allow";
     try {
-      await fetch(`${sandboxEntry.sandboxBaseUrl}/approve`, {
+      await fetch(`${sandboxBaseUrl}/approve`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          ...(sandboxEntry.token ? { Authorization: `Bearer ${sandboxEntry.token}` } : {}),
+          ...(sandboxToken ? { Authorization: `Bearer ${sandboxToken}` } : {}),
         },
         body: JSON.stringify({
           requestId,

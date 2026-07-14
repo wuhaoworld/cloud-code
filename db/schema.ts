@@ -19,6 +19,8 @@ export const workspaces = sqliteTable(
     })
       .notNull()
       .default("idle"),
+    sandboxToken: text("sandbox_token"),
+    sandboxUrl: text("sandbox_url"),
     createdAt: integer("created_at", { mode: "timestamp_ms" })
       .default(sql`(cast(unixepoch('subsecond') * 1000 as integer))`)
       .notNull(),

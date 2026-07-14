@@ -314,6 +314,7 @@ export function ChatArea({
         body: JSON.stringify({
           requestId,
           action: remember ? "approve_permanent" : "approve",
+          workspaceId: currentProject?.workspaceId || undefined,
         }),
       });
       setPendingPermission(null);
@@ -327,7 +328,11 @@ export function ChatArea({
       await fetch("/api/chat/approve", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ requestId, action: "deny" }),
+        body: JSON.stringify({
+          requestId,
+          action: "deny",
+          workspaceId: currentProject?.workspaceId || undefined,
+        }),
       });
       setPendingPermission(null);
     } catch {
