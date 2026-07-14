@@ -98,9 +98,8 @@ export function WorkspaceSwitcher() {
     let elapsedMs = 0;
 
     const getNextDelay = (elapsed: number) => {
-      if (elapsed < 15_000) return 3_000; // first 15s: every 3s
-      if (elapsed < 60_000) return 5_000; // next 45s: every 5s
-      return 10_000; // beyond 1 minute: every 10s
+      if (elapsed < 15_000) return 5_000; // first 15s: every 5s
+      return 10_000; // after 15s: every 10s
     };
 
     const tick = async () => {
@@ -111,7 +110,7 @@ export function WorkspaceSwitcher() {
 
       if (transitioning.length === 0) {
         elapsedMs = 0; // reset backoff once nothing is transitioning
-        timeoutId = setTimeout(tick, 3_000);
+        timeoutId = setTimeout(tick, 5_000);
         return;
       }
 
@@ -136,7 +135,7 @@ export function WorkspaceSwitcher() {
       timeoutId = setTimeout(tick, delay);
     };
 
-    timeoutId = setTimeout(tick, 3_000);
+    timeoutId = setTimeout(tick, 5_000);
 
     return () => clearTimeout(timeoutId);
   }, [updateWorkspace]);
