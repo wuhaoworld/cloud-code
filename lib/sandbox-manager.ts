@@ -51,6 +51,23 @@ const serverTokens = new Map<string, string>();
 // native binary write.
 const bootstrapPromises = new Map<string, Promise<{ baseUrl: string; token: string }>>();
 
+// workspaceId → in-flight Sandbox.getOrCreate() promise. Creation (especially
+// the very first `Sandbox.create` call plus onCreate bootstrap) can take a
+// while, during which the named sandbox may not exist yet on Vercel's side.
+// Without this map:
+//   1. Concurrent getOrCreate() calls (e.g. the fire-and-forget call made
+//      right after a workspace is inserted, plus a subsequent explicit
+//      "start" request from the client) would race and could both attempt
+//      to create the same named sandbox.
+//   2. syncRemoteStatus() polling in parallel would call Sandbox.get() and
+//      legitimately receive a 404 (the sandbox genuinely doesn't exist on
+//      Vercel yet), incorrectly concluding the sandbox is "idle" and
+//      clobbering the "starting" status while creation is still in flight.
+const creatingPromises = new Map<
+  string,
+  Promise<InstanceType<typeof import("@vercel/sandbox").Sandbox>>
+>();
+
 // workspaceId → timestamp of last observed activity (chat request, etc).
 const lastActivity = new Map<string, number>();
 
@@ -147,6 +164,20 @@ export class SandboxManager {
       return cached;
     }
 
+    // Deduplicate concurrent getOrCreate() calls for the same workspace —
+    // e.g. the background call fired right after workspace insertion racing
+    // with an explicit "start" request from the client.
+    const inFlight = creatingPromises.get(workspaceId);
+    if (inFlight) return inFlight;
+
+    const promise = this.doGetOrCreate(workspaceId).finally(() => {
+      creatingPromises.delete(workspaceId);
+    });
+    creatingPromises.set(workspaceId, promise);
+    return promise;
+  }
+
+  private static async doGetOrCreate(workspaceId: string) {
     const [workspace] = await db
       .select()
       .from(workspaces)
@@ -379,6 +410,16 @@ export class SandboxManager {
     // If already marked as idle locally, we don't need to do a remote check.
     if (workspace.sandboxStatus === "idle") {
       return "idle";
+    }
+
+    // A getOrCreate() is currently in flight for this workspace (e.g. the
+    // background creation kicked off right after the workspace row was
+    // inserted). The named sandbox may not exist on Vercel's side yet, so a
+    // remote check here would race and could spuriously 404 even though
+    // creation is proceeding normally. Trust the local "starting" status
+    // and skip the remote check until creation settles.
+    if (creatingPromises.has(workspaceId)) {
+      return workspace.sandboxStatus;
     }
 
     try {
