@@ -71,6 +71,15 @@ const creatingPromises = new Map<
 // workspaceId → timestamp of last observed activity (chat request, etc).
 const lastActivity = new Map<string, number>();
 
+// workspaceId → timestamp of the last time we actually hit the Vercel
+// Sandbox remote API from syncRemoteStatus(). The remote call is a real
+// network round-trip (hundreds of ms to ~1s), so if multiple callers (e.g.
+// several browser tabs, or the client polling loop plus a manual refresh)
+// ask for the status within a short window, we just return the last known
+// DB status instead of re-hitting the remote API every time.
+const lastRemoteStatusCheck = new Map<string, number>();
+const MIN_REMOTE_STATUS_CHECK_INTERVAL_MS = 3_000;
+
 // workspaceId → heartbeat interval handle that periodically extends the
 // sandbox's timeout while the workspace is actively in use.
 const heartbeats = new Map<string, ReturnType<typeof setInterval>>();
@@ -421,6 +430,15 @@ export class SandboxManager {
     if (creatingPromises.has(workspaceId)) {
       return workspace.sandboxStatus;
     }
+
+    // Throttle: skip the remote round-trip if we checked very recently.
+    // Callers (polling UI, multiple tabs, etc.) get the last known DB status
+    // instead of paying for another ~1s Vercel API call every time.
+    const lastCheck = lastRemoteStatusCheck.get(workspaceId) ?? 0;
+    if (Date.now() - lastCheck < MIN_REMOTE_STATUS_CHECK_INTERVAL_MS) {
+      return workspace.sandboxStatus;
+    }
+    lastRemoteStatusCheck.set(workspaceId, Date.now());
 
     try {
       const Sandbox = await getSandboxClass();

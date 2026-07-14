@@ -88,14 +88,32 @@ export function WorkspaceSwitcher() {
 
   const lastStartedIdRef = useRef<string | null>(null);
 
-  // Poll sandbox status of any workspace that is in a transition state ("starting" or "snapshotting")
+  // Poll sandbox status of any workspace that is in a transition state ("starting" or "snapshotting").
+  // Sandbox cold starts can take 1-3 minutes, so instead of hammering the
+  // endpoint at a fixed 2s cadence for the whole duration, we back off the
+  // interval the longer a workspace stays in transition: fast at first
+  // (state changes are more likely soon), slower later (diminishing returns).
   useEffect(() => {
-    const intervalId = setInterval(async () => {
+    let timeoutId: ReturnType<typeof setTimeout>;
+    let elapsedMs = 0;
+
+    const getNextDelay = (elapsed: number) => {
+      if (elapsed < 15_000) return 3_000; // first 15s: every 3s
+      if (elapsed < 60_000) return 5_000; // next 45s: every 5s
+      return 10_000; // beyond 1 minute: every 10s
+    };
+
+    const tick = async () => {
       const currentWorkspaces = useAppStore.getState().workspaces;
       const transitioning = currentWorkspaces.filter(
         (ws) => ws.sandboxStatus === "starting" || ws.sandboxStatus === "snapshotting"
       );
-      if (transitioning.length === 0) return;
+
+      if (transitioning.length === 0) {
+        elapsedMs = 0; // reset backoff once nothing is transitioning
+        timeoutId = setTimeout(tick, 3_000);
+        return;
+      }
 
       await Promise.all(
         transitioning.map(async (ws) => {
@@ -112,9 +130,15 @@ export function WorkspaceSwitcher() {
           }
         })
       );
-    }, 2000);
 
-    return () => clearInterval(intervalId);
+      const delay = getNextDelay(elapsedMs);
+      elapsedMs += delay;
+      timeoutId = setTimeout(tick, delay);
+    };
+
+    timeoutId = setTimeout(tick, 3_000);
+
+    return () => clearTimeout(timeoutId);
   }, [updateWorkspace]);
 
   // Auto-start current workspace if not running
