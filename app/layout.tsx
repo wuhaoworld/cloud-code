@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import "streamdown/styles.css";
 import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/sonner";
 

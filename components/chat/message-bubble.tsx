@@ -1,14 +1,23 @@
 "use client";
 
 import { cn } from "@/lib/utils";
+import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, ChevronRight, Copy, Loader2 } from "lucide-react";
-import { Streamdown } from "streamdown";
+import { Check, ChevronDown, ChevronRight, Copy } from "lucide-react";
 import { ToolCallCard } from "@/components/chat/tool-call-card";
 import type { Message, TextBlock, ThinkingBlock } from "@/store/types";
-import { code } from "@streamdown/code";
-import { cjk } from "@streamdown/cjk";
-import 'katex/dist/katex.min.css';
+
+const MarkdownContent = dynamic(
+  () => import("./markdown-content").then((module) => module.MarkdownContent),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">
+        正在加载消息…
+      </div>
+    ),
+  }
+);
 
 interface MessageBubbleProps {
   message: Message;
@@ -188,16 +197,7 @@ export function MessageBubble({ message }: MessageBubbleProps) {
 function TextBlockView({ block, isStreaming }: { block: TextBlock; isStreaming: boolean }) {
   return (
     <div className="flex-1 min-w-0">
-      <Streamdown
-        mode={isStreaming ? "streaming" : "static"}
-        className="text-sm leading-relaxed text-foreground"
-        plugins={{ code, cjk }}
-        animated
-        linkSafety={{ enabled: false }}
-        controls={{ table: false }}
-      >
-        {block.text}
-      </Streamdown>
+      <MarkdownContent text={block.text} isStreaming={isStreaming} />
     </div>
   );
 }

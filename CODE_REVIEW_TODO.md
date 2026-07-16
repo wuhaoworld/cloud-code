@@ -16,48 +16,15 @@
 
 ## P0 — 严重问题（安全 + 数据正确性，必须立即修复）
 
-- [ ] **1. 两个 API 路由完全无鉴权**
-  - [app/api/plugins/[pluginId]/enabled/route.ts](app/api/plugins/%5BpluginId%5D/enabled/route.ts)：整个 PATCH 无 `getSession`，且插件配置写入 `~/.claude/settings.json` 是**全局共享**的，任意未认证用户可改写影响所有用户。
-  - [app/api/settings/models/route.ts](app/api/settings/models/route.ts)：GET 无鉴权，向任意请求者暴露服务端 `~/.claude/settings.json` 中的模型配置。
-
-- [ ] **2. IDOR：approve 接口可跨用户审批**
-  - [app/api/chat/approve/route.ts](app/api/chat/approve/route.ts) 校验了登录，但 `requestId` 查找时（行 32、54）不比对 `pending.sessionPermissionKey` 中的 `userId`。任意登录用户猜中 UUID 即可批准/拒绝**他人**会话中的工具权限请求。
-  - 同文件还存在 `action` 枚举未校验（行 24），沙箱分支默认把非法值当 `allow` 放行。
-
-- [ ] **3. resume session 未校验归属**
-  - [app/api/chat/stream/route.ts](app/api/chat/stream/route.ts) 行 438-439 直接用客户端传入 `sessionId` resume，仅校验 `projectId` 归属，未校验 sessionId 是否属于该 project。可造成跨项目上下文串扰。
-
-- [ ] **4. Sandbox 内 HTTP 服务无鉴权**
-  - [lib/sandbox-server/index.ts](lib/sandbox-server/index.ts) 的 `/stream`、`/approve`、`/health` 均无 token 校验，而 `sandbox.domain()` 返回的是 Vercel 公网 HTTPS 域名。任何拿到 URL 的人可消耗 Anthropic 额度、自动批准自己的权限请求、读取沙箱文件。安全性完全依赖"域名不可猜"。
 
 - [ ] **5. 客户端断连不传播到 sandbox SDK → 孤儿查询**
   - [lib/sandbox-server/index.ts](lib/sandbox-server/index.ts) 行 56 的 `/stream` handler 未监听 `req.on('close')`，客户端 abort 后 SDK 的 `for await (const message of query(...))` 循环不中止，继续消耗 token、可能执行未授权工具调用。
 
-- [ ] **6. 内存泄漏：两处 Map 永不清理**
-  - [lib/sandbox-approvals.ts](lib/sandbox-approvals.ts) `pendingSandboxApprovals` 仅在 approve 时删除，sandbox 内 5 分钟超时或流 abort 后条目永不清理。
-  - [lib/pending-permissions.ts](lib/pending-permissions.ts) `sessionPermissionUpdates` 无 evict/clear 调用，随会话单调增长。
-
-- [ ] **7. `stop()` 后删除 workspace 漏清理远端快照**
-  - [lib/sandbox-manager.ts](lib/sandbox-manager.ts) 行 300 把 `sandboxId` 置 null，导致 [app/api/workspaces/[id]/route.ts](app/api/workspaces/%5Bid%5D/route.ts) 行 54 的 `if (workspace.sandboxId)` 判断为假，跳过远端 `sandbox.delete()`。残留快照永久计费。
-  - 应改用 `workspace.id` 定位（sandbox name 恒等于 workspace.id）。
-
-- [ ] **8. 环境变量配置严重不一致**
-  - [db/index.ts](db/index.ts) 实际使用 `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN`（Turso 远程）。
-  - [.sample.env](.sample.env) 只列了 `DB_FILE_NAME="file:.data/app.db"`，完全没列 Turso 变量。
-  - [AGENTS.md](AGENTS.md) 与 [CLAUDE.md](CLAUDE.md) 仍说"SQLite 本地文件 `.data/app.db`"，注释掉的旧代码 `// export const db = drizzle(process.env.DB_FILE_NAME!)` 还留在 [db/index.ts:4](db/index.ts)。
-  - [lib/auth-client.ts](lib/auth-client.ts) 用 `NEXT_PUBLIC_BETTER_AUTH_URL`，`.sample.env` 也未列。
-  - 新人按 `.sample.env` 部署必然启动失败。
 
 ---
 
 ## P1 — 架构问题（性能 + 可维护性）
 
-- [ ] **9. 客户端 redirect 瀑布 — 应改 Server Component + `redirect()`**
-  - [app/page.tsx](app/page.tsx) 是正确范例（Server Component 直接 `redirect`）。但 7 个页面退化成"客户端 useEffect → fetch → router.replace"：
-    - [app/chat/page.tsx](app/chat/page.tsx)、[app/chat/settings/page.tsx](app/chat/settings/page.tsx)、[app/plugins/page.tsx](app/plugins/page.tsx)、[app/plugins/[pluginId]/page.tsx](app/plugins/%5BpluginId%5D/page.tsx) — 都是 fetch workspace 后 redirect
-    - [app/chat/[projectId]/page.tsx](app/chat/%5BprojectId%5D/page.tsx)、[app/chat/[projectId]/[sessionId]/page.tsx](app/chat/%5BprojectId%5D/%5BsessionId%5D/page.tsx) — fetch project 后 redirect
-    - [app/[workspace]/page.tsx](app/%5Bworkspace%5D/page.tsx) — client component 仅用 `use(params)` + `router.replace`
-  - 造成"白屏→请求→重定向→再渲染"的串行瀑布，首屏体验差。
 
 - [ ] **10. 大量数据在 Client Component 的 useEffect 中拉取**
   - [components/sidebar/project-tree.tsx](components/sidebar/project-tree.tsx) 行 76 先 fetch projects，回来再 `Promise.all` fetch 每个 project 的 sessions — **典型数据瀑布**。
