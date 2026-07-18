@@ -30,7 +30,8 @@ const RESERVED_PATHS = new Set([
 
 export function OnboardingClient() {
   const router = useRouter();
-  const { addWorkspace, setCurrentWorkspace } = useAppStore();
+  const addWorkspace = useAppStore((state) => state.addWorkspace);
+  const setCurrentWorkspace = useAppStore((state) => state.setCurrentWorkspace);
 
   const [newName, setNewName] = useState("");
   const [newId, setNewId] = useState("");

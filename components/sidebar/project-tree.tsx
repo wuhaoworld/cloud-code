@@ -40,22 +40,20 @@ interface ProjectTreeProps {
 
 export function ProjectTree({ onNewSession, initialProjects, initialSessions }: ProjectTreeProps) {
   const router = useRouter();
-  const {
-    projects,
-    sessions,
-    expandedProjects,
-    currentProjectId,
-    currentSessionId,
-    currentWorkspaceId,
-    setProjects,
-    setSessions,
-    removeProject,
-    toggleProjectExpanded,
-    setExpandedProjects,
-    setCurrentProject,
-    setCurrentSession,
-    clearMessages,
-  } = useAppStore();
+  const projects = useAppStore((state) => state.projects);
+  const sessions = useAppStore((state) => state.sessions);
+  const expandedProjects = useAppStore((state) => state.expandedProjects);
+  const currentProjectId = useAppStore((state) => state.currentProjectId);
+  const currentSessionId = useAppStore((state) => state.currentSessionId);
+  const currentWorkspaceId = useAppStore((state) => state.currentWorkspaceId);
+  const setProjects = useAppStore((state) => state.setProjects);
+  const setSessions = useAppStore((state) => state.setSessions);
+  const removeProject = useAppStore((state) => state.removeProject);
+  const toggleProjectExpanded = useAppStore((state) => state.toggleProjectExpanded);
+  const setExpandedProjects = useAppStore((state) => state.setExpandedProjects);
+  const setCurrentProject = useAppStore((state) => state.setCurrentProject);
+  const setCurrentSession = useAppStore((state) => state.setCurrentSession);
+  const clearMessages = useAppStore((state) => state.clearMessages);
 
   const routePrefix = currentWorkspaceId ? `/${currentWorkspaceId}/chat` : "/chat";
 

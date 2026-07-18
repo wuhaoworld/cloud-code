@@ -15,6 +15,16 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { SessionActionsMenu } from "@/components/session-actions-menu";
 import { v4 as uuidv4 } from "uuid";
 
+function MessageItem({ id, onUpdate }: { id: string; onUpdate: () => void }) {
+  const message = useAppStore((state) => state.messagesById[id]);
+
+  useEffect(() => {
+    onUpdate();
+  }, [message, onUpdate]);
+
+  return message ? <MessageBubble message={message} /> : null;
+}
+
 function parsePermissionMode(value: string | null): PermissionMode | undefined {
   return isPermissionMode(value) ? value : undefined;
 }
@@ -115,24 +125,22 @@ export function ChatArea({
   projectId: string;
   sessionId?: string;
 }) {
-  const {
-    projects,
-    sessions,
-    expandedProjects,
-    currentSessionId,
-    currentWorkspaceId,
-    messages,
-    isStreaming,
-    pendingPermission,
-    setMessages,
-    setPendingPermission,
-    setCurrentProject,
-    setCurrentSession,
-    clearMessages,
-    addSession,
-    replaceSession,
-    setExpandedProjects,
-  } = useAppStore();
+  const projects = useAppStore((state) => state.projects);
+  const sessions = useAppStore((state) => state.sessions);
+  const expandedProjects = useAppStore((state) => state.expandedProjects);
+  const currentSessionId = useAppStore((state) => state.currentSessionId);
+  const currentWorkspaceId = useAppStore((state) => state.currentWorkspaceId);
+  const messageIds = useAppStore((state) => state.messageIds);
+  const isStreaming = useAppStore((state) => state.isStreaming);
+  const pendingPermission = useAppStore((state) => state.pendingPermission);
+  const setMessages = useAppStore((state) => state.setMessages);
+  const setPendingPermission = useAppStore((state) => state.setPendingPermission);
+  const setCurrentProject = useAppStore((state) => state.setCurrentProject);
+  const setCurrentSession = useAppStore((state) => state.setCurrentSession);
+  const clearMessages = useAppStore((state) => state.clearMessages);
+  const addSession = useAppStore((state) => state.addSession);
+  const replaceSession = useAppStore((state) => state.replaceSession);
+  const setExpandedProjects = useAppStore((state) => state.setExpandedProjects);
 
   const { send, interrupt } = useAgentStream();
   const router = useRouter();
@@ -204,10 +212,9 @@ export function ChatArea({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId, sessionId, promptParam]);
 
-  // 自动滚动到底部
-  useEffect(() => {
+  const scrollToBottom = useCallback(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, []);
 
   const handleSend = useCallback(
     async (
@@ -378,12 +385,14 @@ export function ChatArea({
               <Loader2 className="size-6 animate-spin text-muted-foreground" />
               <p className="text-sm text-muted-foreground">正在加载对话历史...</p>
             </div>
-          ) : messages.length === 0 ? (
+          ) : messageIds.length === 0 ? (
             <div className="text-center py-12">
               <p className="text-sm text-muted-foreground">向 AI 发送消息开始对话</p>
             </div>
           ) : (
-            messages.map((msg) => <MessageBubble key={msg.id} message={msg} />)
+            messageIds.map((id) => (
+              <MessageItem key={id} id={id} onUpdate={scrollToBottom} />
+            ))
           )}
           <div ref={bottomRef} />
         </div>

@@ -32,7 +32,9 @@ const NAV_ITEMS: NavItem[] = [
 
 function GeneralPanel() {
   const router = useRouter();
-  const { workspaces, currentWorkspaceId, removeWorkspace } = useAppStore();
+  const workspaces = useAppStore((state) => state.workspaces);
+  const currentWorkspaceId = useAppStore((state) => state.currentWorkspaceId);
+  const removeWorkspace = useAppStore((state) => state.removeWorkspace);
   const currentWorkspace = workspaces.find((w) => w.id === currentWorkspaceId);
 
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -219,7 +221,7 @@ function SandboxStatusBadge({
 
 export default function WorkspaceSettingsPage() {
   const router = useRouter();
-  const { currentWorkspaceId } = useAppStore();
+  const currentWorkspaceId = useAppStore((state) => state.currentWorkspaceId);
   const [activeNav, setActiveNav] = useState("general");
 
   return (

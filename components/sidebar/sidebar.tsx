@@ -29,13 +29,11 @@ export function AppSidebar({ initialProjects, initialSessions }: AppSidebarProps
   const workspaceId = params?.workspace as string | undefined;
   const [createOpen, setCreateOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
-  const {
-    setCurrentProject,
-    setCurrentSession,
-    clearMessages,
-    currentWorkspaceId,
-    setCurrentWorkspace,
-  } = useAppStore();
+  const setCurrentProject = useAppStore((state) => state.setCurrentProject);
+  const setCurrentSession = useAppStore((state) => state.setCurrentSession);
+  const clearMessages = useAppStore((state) => state.clearMessages);
+  const currentWorkspaceId = useAppStore((state) => state.currentWorkspaceId);
+  const setCurrentWorkspace = useAppStore((state) => state.setCurrentWorkspace);
 
   useEffect(() => {
     setCurrentWorkspace(workspaceId || null);

@@ -17,13 +17,11 @@ export function WorkspaceSync({
   initialProjects,
   initialSessions,
 }: WorkspaceSyncProps) {
-  const {
-    setCurrentWorkspace,
-    setWorkspaces,
-    setProjects,
-    setSessions,
-    workspaces,
-  } = useAppStore();
+  const setCurrentWorkspace = useAppStore((state) => state.setCurrentWorkspace);
+  const setWorkspaces = useAppStore((state) => state.setWorkspaces);
+  const setProjects = useAppStore((state) => state.setProjects);
+  const setSessions = useAppStore((state) => state.setSessions);
+  const workspaces = useAppStore((state) => state.workspaces);
 
   // 注入服务端预取数据（仅在首次 mount 时初始化，避免覆盖用户操作后的状态）
   const initializedRef = useRef(false);

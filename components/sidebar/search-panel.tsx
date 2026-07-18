@@ -43,14 +43,12 @@ export function SearchPanel({ open, onOpenChange }: SearchPanelProps) {
   const [query, setQuery] = useState("");
   const [activeIndex, setActiveIndex] = useState(0);
 
-  const {
-    projects,
-    sessions,
-    setSessions,
-    setCurrentProject,
-    setCurrentSession,
-    clearMessages,
-  } = useAppStore();
+  const projects = useAppStore((state) => state.projects);
+  const sessions = useAppStore((state) => state.sessions);
+  const setSessions = useAppStore((state) => state.setSessions);
+  const setCurrentProject = useAppStore((state) => state.setCurrentProject);
+  const setCurrentSession = useAppStore((state) => state.setCurrentSession);
+  const clearMessages = useAppStore((state) => state.clearMessages);
 
   useEffect(() => {
     if (!open) return;

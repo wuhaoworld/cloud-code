@@ -45,8 +45,11 @@ export interface PermissionRequest {
 
 // ---- 纯函数工具 ----
 
-function patchMessage(msgs: Message[], id: string, fn: (m: Message) => Message): Message[] {
-  return msgs.map((m) => (m.id === id ? fn(m) : m));
+function normalizeMessages(messages: Message[]): Pick<AppState, "messageIds" | "messagesById"> {
+  return {
+    messageIds: messages.map((message) => message.id),
+    messagesById: Object.fromEntries(messages.map((message) => [message.id, message])),
+  };
 }
 
 function patchLastBlock<T extends Block>(
@@ -72,7 +75,8 @@ interface AppState {
   sessions: Record<string, ProjectSession[]>;
   currentSessionId: string | null;
 
-  messages: Message[];
+  messageIds: string[];
+  messagesById: Record<string, Message>;
   isStreaming: boolean;
 
   pendingPermission: PermissionRequest | null;
@@ -123,7 +127,7 @@ interface AppState {
 
 export const useAppStore = create<AppState>()(
   devtools(
-    (set, get) => ({
+    (set) => ({
       workspaces: [],
       currentWorkspaceId: null,
 
@@ -132,7 +136,8 @@ export const useAppStore = create<AppState>()(
       currentProjectId: null,
       sessions: {},
       currentSessionId: null,
-      messages: [],
+      messageIds: [],
+      messagesById: {},
       isStreaming: false,
       pendingPermission: null,
       sidebarWidth: 240,
@@ -213,7 +218,13 @@ export const useAppStore = create<AppState>()(
       setCurrentProject: (projectId) =>
         set((state) => {
           if (state.currentProjectId === projectId) return state;
-          return { currentProjectId: projectId, currentSessionId: null, messages: [], isStreaming: false };
+          return {
+            currentProjectId: projectId,
+            currentSessionId: null,
+            messageIds: [],
+            messagesById: {},
+            isStreaming: false,
+          };
         }),
 
       // Session actions
@@ -287,19 +298,33 @@ export const useAppStore = create<AppState>()(
       setCurrentSession: (sessionId) => set({ currentSessionId: sessionId }),
 
       // Message actions
-      setMessages: (messages) => set({ messages }),
+      setMessages: (messages) => set(normalizeMessages(messages)),
       addMessage: (message) =>
-        set((state) => ({ messages: [...state.messages, message] })),
-      clearMessages: () => set({ messages: [] }),
+        set((state) => {
+          const exists = Boolean(state.messagesById[message.id]);
+          state.messagesById[message.id] = message;
+          return {
+            messageIds: exists ? state.messageIds : [...state.messageIds, message.id],
+            messagesById: state.messagesById,
+          };
+        }),
+      clearMessages: () => set({ messageIds: [], messagesById: {} }),
       setIsStreaming: (isStreaming) => set({ isStreaming }),
 
       // ---- 核心：细粒度流式事件分发 ----
       applyStreamEvent: (event: StreamEvent) => {
-        const { messages } = get();
+        const patchMessage = (id: string, patch: (message: Message) => Message) => {
+          set((state) => {
+            const message = state.messagesById[id];
+            if (!message) return state;
+            state.messagesById[id] = patch(message);
+            return { messagesById: state.messagesById };
+          });
+        };
 
         switch (event.type) {
           case "text_delta": {
-            const updated = patchMessage(messages, event.msgId, (msg) => {
+            patchMessage(event.msgId, (msg) => {
               const last = msg.blocks[msg.blocks.length - 1];
               if (!last || last.type !== "text") {
                 return {
@@ -318,12 +343,11 @@ export const useAppStore = create<AppState>()(
                 status: "streaming" as MessageStatus,
               };
             });
-            set({ messages: updated });
             break;
           }
 
           case "thinking_delta": {
-            const updated = patchMessage(messages, event.msgId, (msg) => {
+            patchMessage(event.msgId, (msg) => {
               const last = msg.blocks[msg.blocks.length - 1];
               if (!last || last.type !== "thinking") {
                 return {
@@ -342,12 +366,11 @@ export const useAppStore = create<AppState>()(
                 status: "streaming" as MessageStatus,
               };
             });
-            set({ messages: updated });
             break;
           }
 
           case "thinking_done": {
-            const updated = patchMessage(messages, event.msgId, (msg) => ({
+            patchMessage(event.msgId, (msg) => ({
               ...msg,
               blocks: msg.blocks.map((b) =>
                 b.type === "thinking" && b.durationSeconds === undefined
@@ -355,7 +378,6 @@ export const useAppStore = create<AppState>()(
                   : b
               ),
             }));
-            set({ messages: updated });
             break;
           }
 
@@ -367,17 +389,16 @@ export const useAppStore = create<AppState>()(
               input: event.input,
               status: "running",
             };
-            const updated = patchMessage(messages, event.msgId, (msg) => ({
+            patchMessage(event.msgId, (msg) => ({
               ...msg,
               blocks: [...msg.blocks, newToolBlock],
               status: "streaming" as MessageStatus,
             }));
-            set({ messages: updated });
             break;
           }
 
           case "tool_end": {
-            const updated = patchMessage(messages, event.msgId, (msg) => ({
+            patchMessage(event.msgId, (msg) => ({
               ...msg,
               blocks: msg.blocks.map((b) =>
                 b.type === "tool_use" && b.toolUseId === event.toolUseId
@@ -391,7 +412,6 @@ export const useAppStore = create<AppState>()(
                   : b
               ),
             }));
-            set({ messages: updated });
             break;
           }
 
@@ -411,18 +431,32 @@ export const useAppStore = create<AppState>()(
             break;
 
           case "done": {
-            const updated = messages.map((m) =>
-              m.status === "streaming" ? { ...m, status: "done" as MessageStatus } : m
-            );
-            set({ messages: updated, isStreaming: false });
+            set((state) => ({
+              messagesById: Object.fromEntries(
+                Object.entries(state.messagesById).map(([id, message]) => [
+                  id,
+                  message.status === "streaming"
+                    ? { ...message, status: "done" as MessageStatus }
+                    : message,
+                ])
+              ),
+              isStreaming: false,
+            }));
             break;
           }
 
           case "error": {
-            const updated = messages.map((m) =>
-              m.status === "streaming" ? { ...m, status: "error" as MessageStatus } : m
-            );
-            set({ messages: updated, isStreaming: false });
+            set((state) => ({
+              messagesById: Object.fromEntries(
+                Object.entries(state.messagesById).map(([id, message]) => [
+                  id,
+                  message.status === "streaming"
+                    ? { ...message, status: "error" as MessageStatus }
+                    : message,
+                ])
+              ),
+              isStreaming: false,
+            }));
             break;
           }
 

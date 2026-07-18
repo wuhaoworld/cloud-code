@@ -165,11 +165,18 @@ export function useAgentStream() {
           applyStreamEvent({ type: "error", message: "连接中断" });
         } else {
           // 用户主动中断：将 streaming 消息标为 interrupted
-          const { messages } = useAppStore.getState();
-          const updated = messages.map((m) =>
-            m.status === "streaming" ? { ...m, status: "interrupted" as const } : m
-          );
-          useAppStore.setState({ messages: updated, isStreaming: false });
+          const { messagesById } = useAppStore.getState();
+          useAppStore.setState({
+            messagesById: Object.fromEntries(
+              Object.entries(messagesById).map(([id, message]) => [
+                id,
+                message.status === "streaming"
+                  ? { ...message, status: "interrupted" as const }
+                  : message,
+              ])
+            ),
+            isStreaming: false,
+          });
         }
       } finally {
         abortRef.current = null;

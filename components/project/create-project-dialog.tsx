@@ -27,7 +27,7 @@ export function CreateProjectDialog({
   onOpenChange,
 }: CreateProjectDialogProps) {
   const addProject = useAppStore((s) => s.addProject);
-  const { currentWorkspaceId } = useAppStore();
+  const currentWorkspaceId = useAppStore((state) => state.currentWorkspaceId);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({
     name: "",

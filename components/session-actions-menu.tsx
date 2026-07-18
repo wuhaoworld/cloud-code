@@ -44,7 +44,9 @@ export function SessionActionsMenu({
   className,
 }: SessionActionsMenuProps) {
   const router = useRouter();
-  const { updateSession, removeSession, currentSessionId } = useAppStore();
+  const updateSession = useAppStore((state) => state.updateSession);
+  const removeSession = useAppStore((state) => state.removeSession);
+  const currentSessionId = useAppStore((state) => state.currentSessionId);
 
   const [open, setOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);

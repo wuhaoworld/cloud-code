@@ -25,7 +25,9 @@ export default function WorkspaceChatPage({ params }: WorkspaceChatPageProps) {
   const { workspace } = use(params);
   const router = useRouter();
   const [createOpen, setCreateOpen] = useState(false);
-  const { projects, currentProjectId, setCurrentProject } = useAppStore();
+  const projects = useAppStore((state) => state.projects);
+  const currentProjectId = useAppStore((state) => state.currentProjectId);
+  const setCurrentProject = useAppStore((state) => state.setCurrentProject);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
   // 计算当前生效的项目 ID

@@ -73,8 +73,11 @@ function SandboxIndicator({ status, showLabel = false }: { status: SandboxStatus
 
 export function WorkspaceSwitcher() {
   const router = useRouter();
-  const { workspaces, currentWorkspaceId, addWorkspace, setCurrentWorkspace, updateWorkspace } =
-    useAppStore();
+  const workspaces = useAppStore((state) => state.workspaces);
+  const currentWorkspaceId = useAppStore((state) => state.currentWorkspaceId);
+  const addWorkspace = useAppStore((state) => state.addWorkspace);
+  const setCurrentWorkspace = useAppStore((state) => state.setCurrentWorkspace);
+  const updateWorkspace = useAppStore((state) => state.updateWorkspace);
   const [createOpen, setCreateOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [newId, setNewId] = useState("");
