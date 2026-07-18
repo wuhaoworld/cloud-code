@@ -80,20 +80,18 @@ async function resolveServerUrl(workspaceId: string): Promise<string> {
 
   console.log(`📋 Workspace: ${ws.name}  sandboxId: ${ws.sandboxId}  status: ${ws.sandboxStatus}`);
 
-  // Attempt to resolve sandbox public domain via @vercel/sandbox
+  // Resolve the current E2B port host from the persisted sandbox ID.
   try {
-    const { Sandbox } = await import("@vercel/sandbox");
-    const { VERCEL_TOKEN, VERCEL_TEAM_ID, VERCEL_PROJECT_ID } = process.env;
-    const creds = VERCEL_TOKEN && VERCEL_TEAM_ID && VERCEL_PROJECT_ID
-      ? { token: VERCEL_TOKEN, teamId: VERCEL_TEAM_ID, projectId: VERCEL_PROJECT_ID }
-      : {};
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sandbox = await (Sandbox as any).get({ name: ws.sandboxId, ...creds });
-    const baseUrl: string = sandbox.domain(3001);
-    console.log(col("green", `   ✓ Sandbox base URL: ${baseUrl}`));
+    const { Sandbox } = await import("e2b");
+    const apiKey = process.env.E2B_API_KEY;
+    if (!apiKey) throw new Error("E2B_API_KEY is required");
+    const sandbox = await Sandbox.connect(ws.sandboxId, { apiKey });
+    const host = sandbox.getHost(3001);
+    const baseUrl = host.startsWith("http") ? host : `https://${host}`;
+    console.log(col("green", `   ✓ E2B sandbox base URL: ${baseUrl}`));
     return baseUrl;
   } catch (err) {
-    console.error(col("red", `❌ 连接 Sandbox 失败: ${err}`));
+    console.error(col("red", `❌ 连接 E2B Sandbox 失败: ${err}`));
     process.exit(1);
   }
 }

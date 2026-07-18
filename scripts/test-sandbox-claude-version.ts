@@ -72,21 +72,13 @@ async function main() {
   // 3. 执行 claude --version
   console.log(c("bright", "\n📦 执行 claude --version...\n"));
 
-  const result = await sandbox.runCommand({
-    cmd: "sh",
-    args: [
-      "-c",
-      `bin=$(which claude 2>/dev/null); ` +
-        `echo "which claude: ${"$"}{bin:-NOT FOUND}"; ` +
-        `echo "PATH: $PATH"; ` +
-        `echo "---"; ` +
-        `if [ -n "$bin" ]; then "$bin" --version 2>&1; ` +
-        `else echo "claude binary not found in PATH"; exit 1; fi`,
-    ],
-  });
+  const result = await sandbox.commands.run(
+    "sh -c 'bin=$(find /sandbox-server/node_modules/@anthropic-ai -path \"*/claude\" -type f -perm -u+x -print -quit 2>/dev/null); " +
+      "echo \"claude binary: ${bin:-NOT FOUND}\"; " +
+      "if [ -n \"$bin\" ]; then \"$bin\" --version 2>&1; else exit 1; fi'"
+  );
 
-  const stdout = await result.stdout();
-  const stderr = await result.stderr();
+  const { stdout, stderr } = result;
 
   console.log("stdout:");
   console.log(stdout || c("dim", "(空)"));

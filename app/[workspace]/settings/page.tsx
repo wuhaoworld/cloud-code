@@ -197,7 +197,7 @@ function GeneralPanel() {
 function SandboxStatusBadge({
   status,
 }: {
-  status: "idle" | "starting" | "running" | "snapshotting";
+  status: "idle" | "starting" | "running" | "paused";
 }) {
   const config: Record<
     typeof status,
@@ -206,7 +206,7 @@ function SandboxStatusBadge({
     idle: { label: "空闲", color: "text-muted-foreground", dot: "bg-muted-foreground/40" },
     starting: { label: "启动中", color: "text-amber-600", dot: "bg-amber-400 animate-pulse" },
     running: { label: "运行中", color: "text-emerald-600", dot: "bg-emerald-500" },
-    snapshotting: { label: "快照中", color: "text-blue-600", dot: "bg-blue-400 animate-pulse" },
+    paused: { label: "已暂停", color: "text-blue-600", dot: "bg-blue-400" },
   };
   const { label, color, dot } = config[status];
   return (

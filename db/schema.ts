@@ -11,11 +11,10 @@ export const workspaces = sqliteTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
-    // Sandbox 字段
-    sandboxId: text("sandbox_id"), // 当前运行的 Vercel Sandbox 实例 ID
-    sandboxSnapshotId: text("sandbox_snapshot_id"), // 最新快照 ID（下次启动时恢复）
+    // E2B Sandbox 字段
+    sandboxId: text("sandbox_id"), // 当前 E2B Sandbox 实例 ID
     sandboxStatus: text("sandbox_status", {
-      enum: ["idle", "starting", "running", "snapshotting"],
+      enum: ["idle", "starting", "running", "paused"],
     })
       .notNull()
       .default("idle"),

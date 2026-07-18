@@ -7,8 +7,7 @@ export interface Workspace {
   name: string;
   userId: string;
   sandboxId?: string | null;
-  sandboxSnapshotId?: string | null;
-  sandboxStatus: "idle" | "starting" | "running" | "snapshotting";
+  sandboxStatus: "idle" | "starting" | "running" | "paused";
   createdAt: number;
   updatedAt: number;
 }

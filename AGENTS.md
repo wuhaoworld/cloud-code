@@ -24,9 +24,9 @@
 - **状态管理：** Zustand store（`store/app-store.ts`），配合统一消息 Block 模型（`store/types.ts`）。
 - **数据库层：** Drizzle ORM + SQLite（本地）/ Turso（生产环境）。连接配置在 `db/index.ts`（通过 `TURSO_DATABASE_URL` 环境变量区分环境），认证 schema 在 `db/auth-schema.ts`，业务 schema 在 `db/schema.ts`。本地数据库文件：`.data/app.db`（已 gitignore）。
 - **认证层：** Better Auth，配置在 `lib/auth.ts` —— 邮箱+密码登录，Drizzle 适配器，SQLite 提供者。需要环境变量：`DB_FILE_NAME`、`BETTER_AUTH_SECRET`、`BETTER_AUTH_URL`。
-- **Sandbox 层：** Vercel Sandbox 集成（`@vercel/sandbox`），workspace 级隔离。核心模块：
-  - `lib/sandbox-manager.ts` — Sandbox 生命周期管理（创建、心跳、快照、销毁）
-  - `lib/sandbox-setup.ts` — Sandbox VM 引导（安装依赖、启动 in-sandbox HTTP 服务器）
+- **Sandbox 层：** E2B Sandbox 集成（`e2b`），workspace 级隔离。核心模块：
+  - `lib/sandbox-manager.ts` — E2B Sandbox 生命周期管理（创建/恢复、心跳、暂停、销毁）
+  - `lib/sandbox-setup.ts` — E2B VM 引导（安装依赖、启动 in-sandbox HTTP 服务器）
   - `lib/sandbox-proxy.ts` — SSE 代理层，将 sandbox 内事件转发为统一客户端协议
   - `lib/sandbox-approvals.ts` — Sandbox 权限审批队列
   - `lib/sandbox-server/index.ts` — 运行在 Sandbox VM 内的 Express HTTP 服务器（端口 3001），提供 `/stream`、`/approve`、`/health` 路由
@@ -61,7 +61,7 @@ app/
 
 ### 数据模型
 
-- **Workspace** — 用户的工作区，包含 sandbox 状态（idle / starting / running / snapshotting）
+- **Workspace** — 用户的工作区，包含 E2B sandbox 状态（idle / starting / running / paused）
 - **Project** — 工作区下的项目，关联本地/sandbox 路径
 - **ProjectSession** — 会话元数据（标题、Git 分支、置顶状态）
 - **ChatMessage** — 持久化聊天消息（role、type、content、toolCallJson）
@@ -90,9 +90,8 @@ app/
 | `TURSO_AUTH_TOKEN` | Turso 认证 token |
 | `BETTER_AUTH_SECRET` | Better Auth 密钥 |
 | `BETTER_AUTH_URL` | Better Auth 公共 URL |
-| `VERCEL_TOKEN` | Vercel API token（Sandbox 功能） |
-| `VERCEL_TEAM_ID` | Vercel 团队 ID |
-| `VERCEL_PROJECT_ID` | Vercel 项目 ID |
+| `E2B_API_KEY` | E2B API key（Sandbox 功能） |
+| `E2B_TEMPLATE_ID` | 可选 E2B Template ID；未设置时使用 `base` |
 
 ## Next.js 16 注意事项
 

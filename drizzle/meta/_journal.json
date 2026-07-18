@@ -15,6 +15,13 @@
       "when": 1783669542917,
       "tag": "0001_add_project_workspace_id",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1784358574719,
+      "tag": "0002_e2b-sandbox",
+      "breakpoints": true
     }
   ]
 }

@@ -9,7 +9,7 @@
  *   npx tsx scripts/test-sandbox-task.ts --workspace abc123 --prompt "列出当前目录下的文件"
  *
  * 环境变量 (从 .env 加载):
- *   DB_FILE_NAME, VERCEL_TOKEN, VERCEL_TEAM_ID, VERCEL_PROJECT_ID
+ *   DB_FILE_NAME, E2B_API_KEY, E2B_TEMPLATE_ID (可选)
  */
 
 import "dotenv/config";

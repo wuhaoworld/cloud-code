@@ -263,10 +263,8 @@ export async function POST(req: NextRequest) {
               req.signal
             );
           } catch (err) {
-            // The sandbox may have been auto-stopped (410) or the in-sandbox
-            // HTTP server restarted with a new token (401). Drop the stale
-            // cached reference and retry once against a freshly reconnected/
-            // recreated sandbox instead of surfacing the error to the user.
+            // E2B errors surface as unavailable sandbox HTTP services; discard the stale
+            // cached connection and reconnect once before returning an error.
             const message = err instanceof Error ? err.message : "";
             const isStaleSandbox =
               message.includes("Sandbox server error 410") ||

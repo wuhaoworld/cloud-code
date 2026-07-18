@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
       id: cleanId,
       name: name.trim(),
       userId: session.user.id,
-      sandboxId: cleanId,
+      sandboxId: null,
       sandboxStatus: "starting",
       createdAt: now,
       updatedAt: now,

@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  serverExternalPackages: ["esbuild"],
+  serverExternalPackages: ["e2b", "esbuild"],
 };
 
 export default nextConfig;

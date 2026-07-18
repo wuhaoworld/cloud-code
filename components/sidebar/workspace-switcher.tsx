@@ -50,9 +50,9 @@ function SandboxIndicator({ status, showLabel = false }: { status: SandboxStatus
     { color: string; pulse: boolean; label: string }
   > = {
     running: { color: "bg-emerald-500", pulse: false, label: "运行中" },
+    paused: { color: "bg-zinc-400 dark:bg-zinc-500", pulse: false, label: "已暂停" },
     idle: { color: "bg-zinc-400 dark:bg-zinc-500", pulse: false, label: "已停止" },
     starting: { color: "bg-amber-500", pulse: true, label: "启动中" },
-    snapshotting: { color: "bg-amber-500", pulse: true, label: "快照中" },
     error: { color: "bg-red-500", pulse: false, label: "错误" },
   };
 
@@ -91,11 +91,8 @@ export function WorkspaceSwitcher() {
 
   const lastStartedIdRef = useRef<string | null>(null);
 
-  // Poll sandbox status of any workspace that is in a transition state ("starting" or "snapshotting").
-  // Sandbox cold starts can take 1-3 minutes, so instead of hammering the
-  // endpoint at a fixed 2s cadence for the whole duration, we back off the
-  // interval the longer a workspace stays in transition: fast at first
-  // (state changes are more likely soon), slower later (diminishing returns).
+  // Poll sandbox status while an E2B sandbox is starting or resuming.
+  // Cold starts can take time, so polling backs off after the first few checks.
   useEffect(() => {
     let timeoutId: ReturnType<typeof setTimeout>;
     let elapsedMs = 0;
@@ -107,9 +104,7 @@ export function WorkspaceSwitcher() {
 
     const tick = async () => {
       const currentWorkspaces = useAppStore.getState().workspaces;
-      const transitioning = currentWorkspaces.filter(
-        (ws) => ws.sandboxStatus === "starting" || ws.sandboxStatus === "snapshotting"
-      );
+      const transitioning = currentWorkspaces.filter((ws) => ws.sandboxStatus === "starting");
 
       if (transitioning.length === 0) {
         elapsedMs = 0; // reset backoff once nothing is transitioning
@@ -162,8 +157,8 @@ export function WorkspaceSwitcher() {
           if (data.sandboxStatus) {
             updateWorkspace(currentWorkspaceId, { sandboxStatus: data.sandboxStatus });
             
-            // If the verified status is idle, trigger startup
-            if (data.sandboxStatus === "idle") {
+            // Resume a paused E2B sandbox or start one that has no instance yet.
+            if (data.sandboxStatus === "idle" || data.sandboxStatus === "paused") {
               lastStartedIdRef.current = currentWorkspaceId;
               updateWorkspace(currentWorkspaceId, { sandboxStatus: "starting" });
               const startRes = await fetch(`/api/workspaces/${currentWorkspaceId}/sandbox`, {

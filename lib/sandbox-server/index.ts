@@ -1,5 +1,5 @@
 /**
- * HTTP server that runs INSIDE the Vercel Sandbox VM.
+ * HTTP server that runs inside an E2B Sandbox VM.
  * Started by sandbox-setup.ts after deps are installed.
  *
  * Routes:
@@ -8,6 +8,7 @@
  *   GET  /health   — liveness probe
  */
 
+import fs from "fs";
 import express, { Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
 
@@ -118,13 +119,17 @@ app.post("/stream", async (req: Request, res: Response) => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { query } = require("@anthropic-ai/claude-agent-sdk");
 
-    // Vercel Sandbox VMs boot an Amazon Linux 2023 image (glibc), not Alpine/musl.
-    // Explicitly point the SDK at the glibc-linked linux-x64 binary that was
-    // installed and verified by sandbox-setup.ts. Without this, the SDK's own
-    // auto-resolution logic (which walks import.meta.url to locate the optional
-    // dependency package) can pick the wrong libc variant or fail with
-    // "exists but failed to launch" even when the correct binary is on disk.
-    const CLAUDE_BIN = "/sandbox-server/node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude";
+    // E2B templates can differ in CPU architecture. Resolve the Agent SDK's
+    // installed Linux binary instead of assuming a particular optional package.
+    const agentSdkRoot = "/sandbox-server/node_modules/@anthropic-ai";
+    const agentSdkPackage = fs.existsSync(agentSdkRoot)
+      ? fs.readdirSync(agentSdkRoot).find((name) => name.startsWith("claude-agent-sdk-linux-"))
+      : undefined;
+    const CLAUDE_BIN = process.env.CLAUDE_CODE_EXECUTABLE ??
+      (agentSdkPackage ? `${agentSdkRoot}/${agentSdkPackage}/claude` : "");
+    if (!CLAUDE_BIN || !fs.existsSync(CLAUDE_BIN)) {
+      throw new Error("Claude Agent SDK executable is unavailable in this E2B sandbox");
+    }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const queryOptions: any = {
       cwd,

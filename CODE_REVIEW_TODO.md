@@ -140,7 +140,7 @@
 4. **`PluginEnabledSwitch` 用 `useTransition`** + 失败回滚 optimistic state。
 5. **`PluginGlyph` 是纯 Server Component**，无 hydration 成本。
 6. **SQL 注入安全**：全部用 Drizzle 参数化查询，无原始 SQL 拼接。
-7. **runtime 默认 Node.js 正确**（项目用了 fs、better-sqlite3、@vercel/sandbox）。
+7. **runtime 默认 Node.js 正确**（项目用了 fs、better-sqlite3、E2B SDK）。
 8. **reset-password 正确用 Suspense 包 `useSearchParams`**。
 
 ---
