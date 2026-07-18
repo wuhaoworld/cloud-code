@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { useAppStore } from "@/store/app-store";
 import { Loader2, Sparkles } from "lucide-react";
@@ -28,6 +28,10 @@ const RESERVED_PATHS = new Set([
   "logo.png"
 ]);
 
+const subscribeToUrlOrigin = () => () => {};
+const getUrlOrigin = () => window.location.origin;
+const getServerUrlOrigin = () => "";
+
 export function OnboardingClient() {
   const router = useRouter();
   const addWorkspace = useAppStore((state) => state.addWorkspace);
@@ -35,12 +39,8 @@ export function OnboardingClient() {
 
   const [newName, setNewName] = useState("");
   const [newId, setNewId] = useState("");
-  const [urlPrefix] = useState(() => {
-    if (typeof window !== "undefined") {
-      return `${window.location.origin}/`;
-    }
-    return "/";
-  });
+  const origin = useSyncExternalStore(subscribeToUrlOrigin, getUrlOrigin, getServerUrlOrigin);
+  const urlPrefix = origin ? `${origin}/` : "/";
   const [creating, setCreating] = useState(false);
 
   const handleCreate = async (e: React.FormEvent) => {
