@@ -90,6 +90,7 @@ app/
 | `TURSO_AUTH_TOKEN` | Turso 认证 token |
 | `BETTER_AUTH_SECRET` | Better Auth 密钥 |
 | `BETTER_AUTH_URL` | Better Auth 公共 URL |
+| `E2B_API_URL` | 可选 E2B-compatible API 地址；未设置时使用官方 E2B API |
 | `E2B_API_KEY` | E2B API key（Sandbox 功能） |
 | `E2B_TEMPLATE_ID` | 可选 E2B Template ID；未设置时使用 `base` |
 
