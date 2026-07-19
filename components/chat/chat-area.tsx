@@ -372,12 +372,6 @@ export function ChatArea({
           </>
         )}
         <div className="ml-auto flex items-center gap-2">
-          {isLoadingHistory && (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Loader2 className="size-3 animate-spin" />
-              加载对话历史...
-            </div>
-          )}
           <button
             type="button"
             onClick={() => setIsFilesSidebarOpen((open) => !open)}
