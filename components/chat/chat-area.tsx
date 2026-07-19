@@ -431,10 +431,6 @@ export function ChatArea({
                           <Loader2 className="size-6 animate-spin text-muted-foreground" />
                           <p className="text-sm text-muted-foreground">正在加载对话历史...</p>
                         </div>
-                      ) : messageIds.length === 0 ? (
-                        <div className="py-12 text-center">
-                          <p className="text-sm text-muted-foreground">向 AI 发送消息开始对话</p>
-                        </div>
                       ) : (
                         messageIds.map((id) => (
                           <MessageItem key={id} id={id} onUpdate={scrollToBottom} />
