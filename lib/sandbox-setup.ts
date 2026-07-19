@@ -18,6 +18,7 @@ type SandboxInstance = InstanceType<typeof import("@vercel/sandbox").Sandbox>;
 
 const SERVER_DIR = "/sandbox-server";
 const SERVER_PORT = 3001;
+export const SANDBOX_SERVER_VERSION = 2;
 const HEALTH_TIMEOUT_MS = 60_000;
 // The claude native binary is ~250MB. npm install can take a while on a cold
 // sandbox; give it a generous but bounded timeout so a stalled install never

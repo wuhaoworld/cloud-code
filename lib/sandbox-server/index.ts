@@ -9,6 +9,8 @@
  */
 
 import express, { Request, Response } from "express";
+import fs from "fs";
+import path from "path";
 import { v4 as uuidv4 } from "uuid";
 
 const app = express();
@@ -56,9 +58,113 @@ const pendingPermissions = new Map<
   }
 >();
 
+const SANDBOX_SERVER_VERSION = 2;
+const WORKSPACE_ROOT = "/workspace";
+const IGNORE_DIRS = new Set([
+  "node_modules", ".git", ".next", "dist", "out", "build", ".cache",
+  ".turbo", ".pnpm", "coverage", "__pycache__", ".venv", "venv",
+]);
+const MAX_FILE_TREE_DEPTH = 6;
+const MAX_FILE_TREE_ENTRIES = 1_000;
+
+type ProjectFileNode = {
+  name: string;
+  path: string;
+  type: "file" | "directory";
+  children?: ProjectFileNode[];
+};
+
 // GET /health
 app.get("/health", (_req: Request, res: Response) => {
-  res.json({ ok: true });
+  res.json({ ok: true, version: SANDBOX_SERVER_VERSION });
+});
+
+// POST /files — enumerate one project's directory inside this Sandbox VM.
+app.post("/files", (req: Request, res: Response) => {
+  const { projectPath, q = "", tree = false } = req.body as {
+    projectPath?: string;
+    q?: string;
+    tree?: boolean;
+  };
+
+  // Project paths stored for Sandbox projects are single directory names.
+  // Revalidate at this trust boundary before constructing an OS path.
+  if (typeof projectPath !== "string" || !/^[a-zA-Z0-9_-]+$/.test(projectPath)) {
+    res.status(400).json({ error: "Invalid project path" });
+    return;
+  }
+
+  const rootPath = path.resolve(WORKSPACE_ROOT, projectPath);
+  if (path.dirname(rootPath) !== WORKSPACE_ROOT) {
+    res.status(400).json({ error: "Invalid project path" });
+    return;
+  }
+
+  try {
+    const rootStats = fs.lstatSync(rootPath);
+    if (!rootStats.isDirectory() || rootStats.isSymbolicLink()) {
+      res.status(404).json({ error: "Project directory not found" });
+      return;
+    }
+  } catch {
+    res.status(404).json({ error: "Project directory not found" });
+    return;
+  }
+
+  const files: string[] = [];
+  const fileTree: ProjectFileNode[] = [];
+
+  function walk(
+    directory: string,
+    relativePath: string,
+    depth: number,
+    nodes: ProjectFileNode[],
+  ) {
+    if (depth > MAX_FILE_TREE_DEPTH || files.length >= MAX_FILE_TREE_ENTRIES) return;
+
+    let entries: fs.Dirent[];
+    try {
+      entries = fs.readdirSync(directory, { withFileTypes: true });
+    } catch {
+      return;
+    }
+
+    entries.sort((a, b) => {
+      const directoryOrder = Number(b.isDirectory()) - Number(a.isDirectory());
+      return directoryOrder || a.name.localeCompare(b.name);
+    });
+
+    for (const entry of entries) {
+      if (entry.name.startsWith(".") || entry.isSymbolicLink()) continue;
+      const entryPath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
+
+      if (entry.isDirectory()) {
+        if (IGNORE_DIRS.has(entry.name)) continue;
+        const children: ProjectFileNode[] = [];
+        nodes.push({ name: entry.name, path: entryPath, type: "directory", children });
+        files.push(`${entryPath}/`);
+        walk(path.join(directory, entry.name), entryPath, depth + 1, children);
+      } else if (entry.isFile()) {
+        nodes.push({ name: entry.name, path: entryPath, type: "file" });
+        files.push(entryPath);
+      }
+
+      if (files.length >= MAX_FILE_TREE_ENTRIES) break;
+    }
+  }
+
+  walk(rootPath, "", 0, fileTree);
+
+  if (tree) {
+    res.json({ tree: fileTree });
+    return;
+  }
+
+  const query = typeof q === "string" ? q.toLowerCase() : "";
+  const filtered = query
+    ? files.filter((file) => file.toLowerCase().includes(query)).slice(0, 20)
+    : files.slice(0, 20);
+  res.json({ files: filtered });
 });
 
 // POST /approve — permission decision forwarded from Next.js

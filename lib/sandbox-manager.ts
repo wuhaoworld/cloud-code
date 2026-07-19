@@ -1,4 +1,8 @@
-import { bootstrapSandboxServer, restartServerIfStopped } from "./sandbox-setup";
+import {
+  bootstrapSandboxServer,
+  restartServerIfStopped,
+  SANDBOX_SERVER_VERSION,
+} from "./sandbox-setup";
 import { db } from "@/db";
 import { workspaces } from "@/db/schema";
 import { eq } from "drizzle-orm";
@@ -314,7 +318,8 @@ export class SandboxManager {
       // we have a cached URL from before the timeout.
       try {
         const res = await fetch(`${cached}/health`, { signal: AbortSignal.timeout(3_000) });
-        if (res.ok) {
+        const health = await res.json() as { version?: unknown };
+        if (res.ok && health.version === SANDBOX_SERVER_VERSION) {
           const token = serverTokens.get(workspaceId) ?? "";
           return { baseUrl: cached, token };
         }
@@ -338,7 +343,8 @@ export class SandboxManager {
 
       if (workspace?.sandboxUrl && workspace?.sandboxToken) {
         const res = await fetch(`${workspace.sandboxUrl}/health`, { signal: AbortSignal.timeout(3_000) });
-        if (res.ok) {
+        const health = await res.json() as { version?: unknown };
+        if (res.ok && health.version === SANDBOX_SERVER_VERSION) {
           // Token is valid and server is running, cache in memory and return
           serverUrls.set(workspaceId, workspace.sandboxUrl);
           serverTokens.set(workspaceId, workspace.sandboxToken);

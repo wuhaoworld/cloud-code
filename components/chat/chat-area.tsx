@@ -10,9 +10,10 @@ import { isPermissionMode } from "@/lib/permission-mode";
 import { PermissionDialog } from "@/components/chat/permission-dialog";
 import { useAgentStream } from "@/hooks/use-agent-stream";
 import { toast } from "sonner";
-import { Loader2 } from "lucide-react";
+import { Loader2, PanelRight } from "lucide-react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { SessionActionsMenu } from "@/components/session-actions-menu";
+import { ProjectFilesSidebar } from "@/components/project/project-files-sidebar";
 import { v4 as uuidv4 } from "uuid";
 
 function MessageItem({ id, onUpdate }: { id: string; onUpdate: () => void }) {
@@ -154,6 +155,7 @@ export function ChatArea({
 
   const loadedKeyRef = useRef<string>("");
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [isFilesSidebarOpen, setIsFilesSidebarOpen] = useState(false);
   const isStreamingRef = useRef(isStreaming);
   useEffect(() => { isStreamingRef.current = isStreaming; }, [isStreaming]);
 
@@ -348,19 +350,19 @@ export function ChatArea({
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full min-h-0 flex-col">
       {/* 顶部工具栏 */}
-      <header className="flex items-center gap-1 px-3 py-3 border-b border-border/60 shrink-0">
+      <header className="flex shrink-0 items-center gap-1 border-b border-border/60 px-3 py-3">
         <button
           onClick={() => router.push(`${routePrefix}/${projectId}`)}
-          className="text-sm text-foreground truncate rounded-sm px-1.5 py-0.5 hover:bg-muted transition-colors"
+          className="truncate rounded-sm px-1.5 py-0.5 text-sm text-foreground transition-colors hover:bg-muted"
         >
           {currentProject?.name || "未选择项目"}
         </button>
         {currentSession && (
           <>
-            <span className="text-border text-xs">/</span>
-            <span className="text-sm text-foreground truncate ml-1">{currentSession.title}</span>
+            <span className="text-xs text-border">/</span>
+            <span className="ml-1 truncate text-sm text-foreground">{currentSession.title}</span>
             <SessionActionsMenu
               projectId={projectId}
               sessionId={currentSession.sessionId}
@@ -369,54 +371,73 @@ export function ChatArea({
             />
           </>
         )}
-        {(isStreaming || isLoadingHistory) && (
-          <div className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Loader2 className="size-3 animate-spin" />
-            {isLoadingHistory ? "加载对话历史..." : "AI 正在思考..."}
-          </div>
-        )}
+        <div className="ml-auto flex items-center gap-2">
+          {isLoadingHistory && (
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Loader2 className="size-3 animate-spin" />
+              加载对话历史...
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => setIsFilesSidebarOpen((open) => !open)}
+            className="rounded-sm p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            aria-label={isFilesSidebarOpen ? "隐藏项目文件侧边栏" : "显示项目文件侧边栏"}
+            aria-pressed={isFilesSidebarOpen}
+            title={isFilesSidebarOpen ? "隐藏项目文件" : "显示项目文件"}
+          >
+            <PanelRight className="size-4" />
+          </button>
+        </div>
       </header>
 
-      {/* 消息列表 */}
-      <div className="flex-1 overflow-y-auto scrollbar-thin">
-        <div className="max-w-3xl mx-auto px-2 py-6">
-          {isLoadingHistory ? (
-            <div className="flex flex-col items-center justify-center py-16 gap-3">
-              <Loader2 className="size-6 animate-spin text-muted-foreground" />
-              <p className="text-sm text-muted-foreground">正在加载对话历史...</p>
+      <div className="flex min-h-0 flex-1">
+        <div className="flex min-w-0 flex-1 flex-col">
+          {/* 消息列表 */}
+          <div className="flex-1 overflow-y-auto scrollbar-thin">
+            <div className="mx-auto max-w-3xl px-2 py-6">
+              {isLoadingHistory ? (
+                <div className="flex flex-col items-center justify-center gap-3 py-16">
+                  <Loader2 className="size-6 animate-spin text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground">正在加载对话历史...</p>
+                </div>
+              ) : messageIds.length === 0 ? (
+                <div className="py-12 text-center">
+                  <p className="text-sm text-muted-foreground">向 AI 发送消息开始对话</p>
+                </div>
+              ) : (
+                messageIds.map((id) => (
+                  <MessageItem key={id} id={id} onUpdate={scrollToBottom} />
+                ))
+              )}
+              <div ref={bottomRef} />
             </div>
-          ) : messageIds.length === 0 ? (
-            <div className="text-center py-12">
-              <p className="text-sm text-muted-foreground">向 AI 发送消息开始对话</p>
-            </div>
-          ) : (
-            messageIds.map((id) => (
-              <MessageItem key={id} id={id} onUpdate={scrollToBottom} />
-            ))
-          )}
-          <div ref={bottomRef} />
-        </div>
-      </div>
+          </div>
 
-      {/* 输入区域 */}
-      <div className="shrink-0 border-t border-border/60 px-6 py-4">
-        <div className="max-w-3xl mx-auto">
-          {pendingPermission ? (
-            <PermissionDialog
-              key={pendingPermission.requestId}
-              permission={pendingPermission}
-              onApprove={handleApprove}
-              onDeny={handleDeny}
-            />
-          ) : (
-            <ChatInput
-              onSend={handleSend}
-              onStop={handleStop}
-              disabled={!currentProject || isLoadingHistory}
-              projectId={projectId}
-            />
-          )}
+          {/* 输入区域 */}
+          <div className="shrink-0 border-t border-border/60 px-6 py-4">
+            <div className="mx-auto max-w-3xl">
+              {pendingPermission ? (
+                <PermissionDialog
+                  key={pendingPermission.requestId}
+                  permission={pendingPermission}
+                  onApprove={handleApprove}
+                  onDeny={handleDeny}
+                />
+              ) : (
+                <ChatInput
+                  onSend={handleSend}
+                  onStop={handleStop}
+                  disabled={!currentProject || isLoadingHistory}
+                  projectId={projectId}
+                />
+              )}
+            </div>
+          </div>
         </div>
+        {isFilesSidebarOpen && (
+          <ProjectFilesSidebar key={projectId} projectId={projectId} />
+        )}
       </div>
     </div>
   );
