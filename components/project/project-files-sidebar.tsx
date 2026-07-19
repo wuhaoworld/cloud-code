@@ -75,8 +75,8 @@ export function ProjectFilesSidebar({ projectId }: { projectId: string }) {
   }, [projectId]);
 
   return (
-    <aside className="flex w-72 shrink-0 flex-col border-l border-border/60 bg-background">
-      <div className="border-b border-border/60 px-3 py-3 text-sm font-medium">项目文件</div>
+    <aside className="flex h-full min-w-0 flex-col bg-background">
+      <div className="border-b border-border/60 px-3 py-3 pr-12 text-sm font-medium">项目文件</div>
       <div className="flex-1 overflow-y-auto py-2 scrollbar-thin">
         {isLoading ? (
           <div className="flex items-center gap-2 px-3 py-2 text-sm text-muted-foreground">

@@ -14,6 +14,12 @@ import { Loader2, PanelRight } from "lucide-react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { SessionActionsMenu } from "@/components/session-actions-menu";
 import { ProjectFilesSidebar } from "@/components/project/project-files-sidebar";
+import {
+  ResizableHandle,
+  ResizablePanel,
+  ResizablePanelGroup,
+} from "@/components/ui/resizable";
+import { cn } from "@/lib/utils";
 import { v4 as uuidv4 } from "uuid";
 
 function MessageItem({ id, onUpdate }: { id: string; onUpdate: () => void }) {
@@ -134,6 +140,7 @@ export function ChatArea({
   const messageIds = useAppStore((state) => state.messageIds);
   const isStreaming = useAppStore((state) => state.isStreaming);
   const pendingPermission = useAppStore((state) => state.pendingPermission);
+  const rightPanelOpen = useAppStore((state) => state.rightPanelOpen);
   const setMessages = useAppStore((state) => state.setMessages);
   const setPendingPermission = useAppStore((state) => state.setPendingPermission);
   const setCurrentProject = useAppStore((state) => state.setCurrentProject);
@@ -142,6 +149,7 @@ export function ChatArea({
   const addSession = useAppStore((state) => state.addSession);
   const replaceSession = useAppStore((state) => state.replaceSession);
   const setExpandedProjects = useAppStore((state) => state.setExpandedProjects);
+  const setRightPanelOpen = useAppStore((state) => state.setRightPanelOpen);
 
   const { send, interrupt } = useAgentStream();
   const router = useRouter();
@@ -155,7 +163,6 @@ export function ChatArea({
 
   const loadedKeyRef = useRef<string>("");
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
-  const [isFilesSidebarOpen, setIsFilesSidebarOpen] = useState(false);
   const isStreamingRef = useRef(isStreaming);
   useEffect(() => { isStreamingRef.current = isStreaming; }, [isStreaming]);
 
@@ -350,89 +357,113 @@ export function ChatArea({
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      {/* 顶部工具栏 */}
-      <header className="flex shrink-0 items-center gap-1 border-b border-border/60 px-3 py-3">
-        <button
-          onClick={() => router.push(`${routePrefix}/${projectId}`)}
-          className="truncate rounded-sm px-1.5 py-0.5 text-sm text-foreground transition-colors hover:bg-muted"
-        >
-          {currentProject?.name || "未选择项目"}
-        </button>
-        {currentSession && (
+    <div className="relative h-full min-h-0">
+      <button
+        type="button"
+        onClick={() => setRightPanelOpen(!rightPanelOpen)}
+        className={cn(
+          "absolute top-2 right-3 z-20 rounded-sm p-1.5 transition-colors",
+          rightPanelOpen
+            ? "bg-muted text-foreground shadow-sm"
+            : "text-muted-foreground hover:bg-muted hover:text-foreground",
+        )}
+        aria-label={rightPanelOpen ? "隐藏项目文件侧边栏" : "显示项目文件侧边栏"}
+        aria-pressed={rightPanelOpen}
+        title={rightPanelOpen ? "隐藏项目文件" : "显示项目文件"}
+      >
+        <PanelRight className="size-4" />
+      </button>
+
+      <ResizablePanelGroup
+        orientation="horizontal"
+        className="h-full min-h-0"
+      >
+        <ResizablePanel id="chat" minSize="24rem" className="min-w-0">
+          <div className="flex h-full min-h-0 min-w-0 flex-col">
+            {/* 顶部工具栏 */}
+            <header className="flex shrink-0 items-center gap-1 border-b border-border/60 px-3 py-3 pr-12">
+              <button
+                onClick={() => router.push(`${routePrefix}/${projectId}`)}
+                className="truncate rounded-sm px-1.5 py-0.5 text-sm text-foreground transition-colors hover:bg-muted"
+              >
+                {currentProject?.name || "未选择项目"}
+              </button>
+              {currentSession && (
+                <>
+                  <span className="text-xs text-border">/</span>
+                  <span className="ml-1 truncate text-sm text-foreground">{currentSession.title}</span>
+                  <SessionActionsMenu
+                    projectId={projectId}
+                    sessionId={currentSession.sessionId}
+                    title={currentSession.title}
+                    pinnedAt={currentSession.pinnedAt}
+                  />
+                </>
+              )}
+            </header>
+
+            <div className="flex min-h-0 flex-1 flex-col">
+              {/* 消息列表 */}
+              <div className="flex-1 overflow-y-auto scrollbar-thin">
+                <div className="mx-auto max-w-3xl px-2 py-6">
+                  {isLoadingHistory ? (
+                    <div className="flex flex-col items-center justify-center gap-3 py-16">
+                      <Loader2 className="size-6 animate-spin text-muted-foreground" />
+                      <p className="text-sm text-muted-foreground">正在加载对话历史...</p>
+                    </div>
+                  ) : messageIds.length === 0 ? (
+                    <div className="py-12 text-center">
+                      <p className="text-sm text-muted-foreground">向 AI 发送消息开始对话</p>
+                    </div>
+                  ) : (
+                    messageIds.map((id) => (
+                      <MessageItem key={id} id={id} onUpdate={scrollToBottom} />
+                    ))
+                  )}
+                  <div ref={bottomRef} />
+                </div>
+              </div>
+
+              {/* 输入区域 */}
+              <div className="shrink-0 border-t border-border/60 px-6 py-4">
+                <div className="mx-auto max-w-3xl">
+                  {pendingPermission ? (
+                    <PermissionDialog
+                      key={pendingPermission.requestId}
+                      permission={pendingPermission}
+                      onApprove={handleApprove}
+                      onDeny={handleDeny}
+                    />
+                  ) : (
+                    <ChatInput
+                      onSend={handleSend}
+                      onStop={handleStop}
+                      disabled={!currentProject || isLoadingHistory}
+                      projectId={projectId}
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </ResizablePanel>
+
+        {rightPanelOpen && (
           <>
-            <span className="text-xs text-border">/</span>
-            <span className="ml-1 truncate text-sm text-foreground">{currentSession.title}</span>
-            <SessionActionsMenu
-              projectId={projectId}
-              sessionId={currentSession.sessionId}
-              title={currentSession.title}
-              pinnedAt={currentSession.pinnedAt}
-            />
+            <ResizableHandle className="cursor-col-resize bg-border/60 hover:bg-primary/60 focus-visible:bg-primary/60" />
+            <ResizablePanel
+              id="project-files"
+              defaultSize="22rem"
+              minSize="16rem"
+              maxSize="50%"
+              groupResizeBehavior="preserve-pixel-size"
+              className="min-w-0"
+            >
+              <ProjectFilesSidebar key={projectId} projectId={projectId} />
+            </ResizablePanel>
           </>
         )}
-        <div className="ml-auto flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setIsFilesSidebarOpen((open) => !open)}
-            className="rounded-sm p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            aria-label={isFilesSidebarOpen ? "隐藏项目文件侧边栏" : "显示项目文件侧边栏"}
-            aria-pressed={isFilesSidebarOpen}
-            title={isFilesSidebarOpen ? "隐藏项目文件" : "显示项目文件"}
-          >
-            <PanelRight className="size-4" />
-          </button>
-        </div>
-      </header>
-
-      <div className="flex min-h-0 flex-1">
-        <div className="flex min-w-0 flex-1 flex-col">
-          {/* 消息列表 */}
-          <div className="flex-1 overflow-y-auto scrollbar-thin">
-            <div className="mx-auto max-w-3xl px-2 py-6">
-              {isLoadingHistory ? (
-                <div className="flex flex-col items-center justify-center gap-3 py-16">
-                  <Loader2 className="size-6 animate-spin text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">正在加载对话历史...</p>
-                </div>
-              ) : messageIds.length === 0 ? (
-                <div className="py-12 text-center">
-                  <p className="text-sm text-muted-foreground">向 AI 发送消息开始对话</p>
-                </div>
-              ) : (
-                messageIds.map((id) => (
-                  <MessageItem key={id} id={id} onUpdate={scrollToBottom} />
-                ))
-              )}
-              <div ref={bottomRef} />
-            </div>
-          </div>
-
-          {/* 输入区域 */}
-          <div className="shrink-0 border-t border-border/60 px-6 py-4">
-            <div className="mx-auto max-w-3xl">
-              {pendingPermission ? (
-                <PermissionDialog
-                  key={pendingPermission.requestId}
-                  permission={pendingPermission}
-                  onApprove={handleApprove}
-                  onDeny={handleDeny}
-                />
-              ) : (
-                <ChatInput
-                  onSend={handleSend}
-                  onStop={handleStop}
-                  disabled={!currentProject || isLoadingHistory}
-                  projectId={projectId}
-                />
-              )}
-            </div>
-          </div>
-        </div>
-        {isFilesSidebarOpen && (
-          <ProjectFilesSidebar key={projectId} projectId={projectId} />
-        )}
-      </div>
+      </ResizablePanelGroup>
     </div>
   );
 }
