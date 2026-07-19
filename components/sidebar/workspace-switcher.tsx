@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ChevronsUpDown, Loader2, Plus, Sparkles, Check } from "lucide-react";
@@ -89,107 +89,167 @@ export function WorkspaceSwitcher() {
   });
   const [creating, setCreating] = useState(false);
 
-  const lastStartedIdRef = useRef<string | null>(null);
+  const autoStartAttemptsRef = useRef(new Set<string>());
 
-  // Poll sandbox status of any workspace that is in a transition state ("starting" or "snapshotting").
-  // Sandbox cold starts can take 1-3 minutes, so instead of hammering the
-  // endpoint at a fixed 2s cadence for the whole duration, we back off the
-  // interval the longer a workspace stays in transition: fast at first
-  // (state changes are more likely soon), slower later (diminishing returns).
+  const updateSandboxStatus = useCallback(
+    (workspaceId: string, sandboxStatus: SandboxStatus) => {
+      const workspace = useAppStore
+        .getState()
+        .workspaces.find((item) => item.id === workspaceId);
+
+      // Do not replace the store array when the server has no new information.
+      // Replacing it would re-render subscribers and previously re-triggered
+      // the auto-start effect indefinitely.
+      if (workspace && workspace.sandboxStatus !== sandboxStatus) {
+        updateWorkspace(workspaceId, { sandboxStatus });
+      }
+    },
+    [updateWorkspace]
+  );
+
+  // Poll sandbox status of workspaces in a transition state. The cancellation
+  // guard prevents an in-flight tick from scheduling a new timer after Fast
+  // Refresh or unmount has already cleaned up this effect.
   useEffect(() => {
-    let timeoutId: ReturnType<typeof setTimeout>;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
     let elapsedMs = 0;
+    let disposed = false;
+    const controller = new AbortController();
 
     const getNextDelay = (elapsed: number) => {
-      if (elapsed < 15_000) return 5_000; // first 15s: every 5s
-      return 10_000; // after 15s: every 10s
+      if (elapsed < 15_000) return 5_000;
+      return 10_000;
+    };
+
+    const schedule = (delay: number) => {
+      if (!disposed) {
+        timeoutId = setTimeout(() => void tick(), delay);
+      }
     };
 
     const tick = async () => {
-      const currentWorkspaces = useAppStore.getState().workspaces;
-      const transitioning = currentWorkspaces.filter(
-        (ws) => ws.sandboxStatus === "starting" || ws.sandboxStatus === "snapshotting"
-      );
+      if (disposed) return;
+
+      const transitioning = useAppStore
+        .getState()
+        .workspaces.filter(
+          (ws) => ws.sandboxStatus === "starting" || ws.sandboxStatus === "snapshotting"
+        );
 
       if (transitioning.length === 0) {
-        elapsedMs = 0; // reset backoff once nothing is transitioning
-        timeoutId = setTimeout(tick, 5_000);
+        elapsedMs = 0;
+        schedule(5_000);
         return;
       }
 
       await Promise.all(
         transitioning.map(async (ws) => {
           try {
-            const res = await fetch(`/api/workspaces/${ws.id}/sandbox`);
-            if (res.ok) {
-              const data = await res.json();
-              if (data.sandboxStatus && data.sandboxStatus !== ws.sandboxStatus) {
-                updateWorkspace(ws.id, { sandboxStatus: data.sandboxStatus });
+            const res = await fetch(`/api/workspaces/${ws.id}/sandbox`, {
+              signal: controller.signal,
+            });
+            if (res.ok && !disposed) {
+              const data = (await res.json()) as { sandboxStatus?: SandboxStatus };
+              if (data.sandboxStatus) {
+                updateSandboxStatus(ws.id, data.sandboxStatus);
               }
             }
           } catch (err) {
-            console.error(`Failed to poll sandbox status for ${ws.id}:`, err);
+            if (!controller.signal.aborted) {
+              console.error(`Failed to poll sandbox status for ${ws.id}:`, err);
+            }
           }
         })
       );
 
+      if (disposed) return;
+
       const delay = getNextDelay(elapsedMs);
       elapsedMs += delay;
-      timeoutId = setTimeout(tick, delay);
+      schedule(delay);
     };
 
-    timeoutId = setTimeout(tick, 5_000);
+    schedule(5_000);
 
-    return () => clearTimeout(timeoutId);
-  }, [updateWorkspace]);
+    return () => {
+      disposed = true;
+      controller.abort();
+      if (timeoutId) clearTimeout(timeoutId);
+    };
+  }, [updateSandboxStatus]);
 
-  // Auto-start current workspace if not running
+  // Auto-start only a workspace that is locally idle. The effect deliberately
+  // does not depend on `workspaces`: status writes must not start another sync.
   useEffect(() => {
     if (!currentWorkspaceId) return;
 
-    // If we already triggered start for this workspace id in this session/mount, don't do it again
-    if (lastStartedIdRef.current === currentWorkspaceId) return;
+    const workspace = useAppStore
+      .getState()
+      .workspaces.find((item) => item.id === currentWorkspaceId);
+    if (!workspace || workspace.sandboxStatus !== "idle") return;
 
-    const ws = workspaces.find((w) => w.id === currentWorkspaceId);
-    if (!ws) return;
+    const autoStartAttempts = autoStartAttemptsRef.current;
+    if (autoStartAttempts.has(currentWorkspaceId)) return;
+
+    let disposed = false;
+    const controller = new AbortController();
 
     const syncAndStart = async () => {
+      autoStartAttempts.add(currentWorkspaceId);
+
       try {
-        // First, fetch the latest synced status from the backend to ensure accurate local state
-        const res = await fetch(`/api/workspaces/${currentWorkspaceId}/sandbox`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data.sandboxStatus) {
-            updateWorkspace(currentWorkspaceId, { sandboxStatus: data.sandboxStatus });
-            
-            // If the verified status is idle, trigger startup
-            if (data.sandboxStatus === "idle") {
-              lastStartedIdRef.current = currentWorkspaceId;
-              updateWorkspace(currentWorkspaceId, { sandboxStatus: "starting" });
-              const startRes = await fetch(`/api/workspaces/${currentWorkspaceId}/sandbox`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ action: "start" }),
-              });
-              if (startRes.ok) {
-                const startData = await startRes.json();
-                if (startData.sandboxStatus) {
-                  updateWorkspace(currentWorkspaceId, { sandboxStatus: startData.sandboxStatus });
-                }
-              } else {
-                updateWorkspace(currentWorkspaceId, { sandboxStatus: "idle" });
-                lastStartedIdRef.current = null;
-              }
-            }
-          }
+        const res = await fetch(`/api/workspaces/${currentWorkspaceId}/sandbox`, {
+          signal: controller.signal,
+        });
+        if (!res.ok || disposed) return;
+
+        const data = (await res.json()) as { sandboxStatus?: SandboxStatus };
+        if (!data.sandboxStatus || disposed) return;
+
+        updateSandboxStatus(currentWorkspaceId, data.sandboxStatus);
+        if (data.sandboxStatus !== "idle") return;
+
+        updateSandboxStatus(currentWorkspaceId, "starting");
+        const startRes = await fetch(`/api/workspaces/${currentWorkspaceId}/sandbox`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "start" }),
+          signal: controller.signal,
+        });
+
+        if (disposed) return;
+
+        if (!startRes.ok) {
+          updateSandboxStatus(currentWorkspaceId, "idle");
+          autoStartAttempts.delete(currentWorkspaceId);
+          return;
+        }
+
+        const startData = (await startRes.json()) as { sandboxStatus?: SandboxStatus };
+        if (startData.sandboxStatus && !disposed) {
+          updateSandboxStatus(currentWorkspaceId, startData.sandboxStatus);
         }
       } catch (err) {
-        console.error("Failed to sync and start sandbox:", err);
+        if (!controller.signal.aborted) {
+          console.error("Failed to sync and start sandbox:", err);
+          updateSandboxStatus(currentWorkspaceId, "idle");
+          autoStartAttempts.delete(currentWorkspaceId);
+        }
       }
     };
 
-    syncAndStart();
-  }, [currentWorkspaceId, workspaces, updateWorkspace]);
+    // Fast Refresh runs effects even when dependencies did not change. Deferring
+    // the request lets its cleanup cancel the development-only probe first.
+    const timeoutId = setTimeout(() => void syncAndStart(), 0);
+
+    return () => {
+      disposed = true;
+      clearTimeout(timeoutId);
+      controller.abort();
+      // Allow a remounted/Fast Refreshed effect to retry an aborted request.
+      autoStartAttempts.delete(currentWorkspaceId);
+    };
+  }, [currentWorkspaceId, updateSandboxStatus]);
 
   const current = workspaces.find((w) => w.id === currentWorkspaceId);
 
