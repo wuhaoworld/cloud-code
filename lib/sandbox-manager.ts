@@ -96,9 +96,32 @@ function stopHeartbeat(workspaceId: string) {
   }
 }
 
+function isMaximumSandboxTimeoutError(err: unknown) {
+  if (!(err instanceof Error)) return false;
+
+  // The SDK's top-level message is only "Status code 400 is not ok". Its
+  // parsed Vercel response body is exposed as `json`, where the useful code
+  // and message live.
+  const responseBody = (err as Error & { json?: unknown }).json;
+  const responseError =
+    responseBody && typeof responseBody === "object"
+      ? (responseBody as { error?: { code?: unknown; message?: unknown } }).error
+      : undefined;
+  const code = typeof responseError?.code === "string" ? responseError.code : "";
+  const apiMessage =
+    typeof responseError?.message === "string" ? responseError.message : "";
+
+  return (
+    (code === "sandbox_timeout_invalid" &&
+      apiMessage.includes("maximum execution timeout")) ||
+    err.message.includes("sandbox_timeout_invalid") ||
+    err.message.includes("maximum execution timeout")
+  );
+}
+
 /**
- * Periodically verify the sandbox's responsiveness as long as the workspace
- * is actively in use. If the heartbeat fails, clean up local state.
+ * Periodically verify and renew the sandbox while the workspace is actively
+ * in use. If the heartbeat fails, clean up local state.
  */
 function startHeartbeat(
   workspaceId: string,
@@ -113,9 +136,9 @@ function startHeartbeat(
       return;
     }
     try {
-      // Verify sandbox is still alive without modifying its remaining timeout.
-      // Every dialogue turn itself directly extends the timeout to 30 minutes.
-      await sandbox.extendTimeout(0);
+      // A zero-duration extension is invalid. Renew to the same sliding
+      // window used by dialogue turns; this is also a real liveness check.
+      await ensureTargetTimeout(sandbox, INITIAL_TIMEOUT_MS);
     } catch {
       // Sandbox is likely already gone (stopped/deleted) — clean up local
       // state so the next request falls through to recreate/reconnect
@@ -155,16 +178,11 @@ async function ensureTargetTimeout(
       await sandbox.extendTimeout(targetMs);
     }
   } catch (err: unknown) {
-    // Vercel returns 400 sandbox_timeout_invalid when the extension would
-    // exceed the plan's maximum execution timeout. This is not actionable —
-    // the sandbox is already as extended as it can be.
-    const isMaxTimeout =
-      err instanceof Error &&
-      (err.message.includes("sandbox_timeout_invalid") ||
-        err.message.includes("exceed maximum execution timeout"));
-    if (!isMaxTimeout) {
-      console.error("Failed to extend sandbox timeout:", err);
+    if (isMaximumSandboxTimeoutError(err)) {
+      // The sandbox is already as long-lived as the plan permits.
+      return;
     }
+    throw err;
   }
 }
 
