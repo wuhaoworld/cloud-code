@@ -34,11 +34,12 @@ import { toast } from "sonner";
 
 interface ProjectTreeProps {
   onNewSession?: (projectId: string) => void;
+  onCreateProject?: () => void;
   initialProjects?: Project[];
   initialSessions?: Record<string, ProjectSession[]>;
 }
 
-export function ProjectTree({ onNewSession, initialProjects, initialSessions }: ProjectTreeProps) {
+export function ProjectTree({ onNewSession, onCreateProject, initialProjects, initialSessions }: ProjectTreeProps) {
   const router = useRouter();
   const projects = useAppStore((state) => state.projects);
   const sessions = useAppStore((state) => state.sessions);
@@ -219,10 +220,16 @@ export function ProjectTree({ onNewSession, initialProjects, initialSessions }: 
   if (projects.length === 0) {
     return (
       <div className="px-4 py-4 text-center">
-        <p className="text-xs text-muted-foreground">暂无项目</p>
-        <p className="text-xs text-muted-foreground mt-0.5">
-          点击上方&quot;+&quot;新建项目
-        </p>
+        <p className="text-xs text-muted-foreground mb-2">暂无项目</p>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onCreateProject?.()}
+          className="h-7 text-xs gap-1 shadow-none"
+        >
+          <Plus className="size-3" />
+          新建项目
+        </Button>
       </div>
     );
   }

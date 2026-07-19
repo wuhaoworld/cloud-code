@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { usePathname, useRouter, useParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
-  FolderPlus,
+  Plus,
   LayoutGrid,
   Search,
   Settings,
@@ -116,13 +116,14 @@ export function AppSidebar({ initialProjects, initialSessions }: AppSidebarProps
               id="sidebar-new-project-btn"
               title="新建项目"
             >
-              <FolderPlus className="size-3.5" />
+              <Plus className="size-3.5" />
             </button>
           </div>
 
           <div className="flex-1 overflow-y-auto scrollbar-thin px-1">
             <ProjectTree
               onNewSession={() => {}}
+              onCreateProject={() => setCreateOpen(true)}
               initialProjects={initialProjects}
               initialSessions={initialSessions}
             />
