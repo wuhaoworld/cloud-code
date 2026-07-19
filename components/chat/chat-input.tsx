@@ -101,6 +101,7 @@ interface ChatInputProps {
 }
 
 const MAX_ATTACHMENTS = 5;
+const EMPTY_PROJECT_FILES: string[] = [];
 
 interface ModelOption {
   name: string;
@@ -119,6 +120,11 @@ export function ChatInput({
   projectSelector,
 }: ChatInputProps) {
   const isStreaming = useAppStore((s) => s.isStreaming);
+  const projectFilesCacheEntry = useAppStore((s) =>
+    projectId ? s.projectFilesById[projectId] : undefined,
+  );
+  const projectFiles = projectFilesCacheEntry?.files ?? EMPTY_PROJECT_FILES;
+  const ensureProjectFiles = useAppStore((s) => s.ensureProjectFiles);
   const isActive = isStreaming;
 
   const [model, setModel] = useState<ModelOption>({ name: "Loading…", id: "" });
@@ -188,7 +194,6 @@ export function ChatInput({
   const [selectedSkills, setSelectedSkills] = useState<Skill[]>([]);
 
   // ── Files ──
-  const [projectFiles, setProjectFiles] = useState<string[]>([]);
   const [showFilesPanel, setShowFilesPanel] = useState(false);
   const [filesFilter, setFilesFilter] = useState("");
 
@@ -229,30 +234,10 @@ export function ChatInput({
       .catch((err) => console.error("Failed to load skills:", err));
   }, [projectId]);
 
-  // ── Refresh project files ──
-  const refreshProjectFiles = useCallback(
-    (filter = "") => {
-      if (!projectId) {
-        setProjectFiles([]);
-        return;
-      }
-      fetch(
-        `/api/projects/${projectId}/files${filter ? `?q=${encodeURIComponent(filter)}` : ""}`,
-      )
-        .then((r) => r.json())
-        .then((data: { files?: string[] }) => {
-          setProjectFiles(data.files ?? []);
-        })
-        .catch((err) => console.error("Failed to load project files:", err));
-    },
-    [projectId],
-  );
-
-  // ── Pre-load files when projectId changes ──
+  // ── Load shared project files ──
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- legitimate state reset on dependency change
-    refreshProjectFiles();
-  }, [refreshProjectFiles]);
+    if (projectId) void ensureProjectFiles(projectId);
+  }, [ensureProjectFiles, projectFilesCacheEntry, projectId]);
 
   // ── Click outside to close panels ──
   useEffect(() => {
@@ -446,7 +431,6 @@ export function ChatInput({
               setShowSkillsPanel(false);
               setFilesFilter(textBetween);
               setSelectedIndex(0);
-              refreshProjectFiles(textBetween);
               editorSelectionRef.current = {
                 node: container as Text,
                 offset: triggerIdx,

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useAppStore, type ProjectFileNode } from "@/store/app-store";
 import {
   ChevronDown,
   ChevronRight,
@@ -9,13 +10,6 @@ import {
   FolderOpen,
   Loader2,
 } from "lucide-react";
-
-export type ProjectFileNode = {
-  name: string;
-  path: string;
-  type: "file" | "directory";
-  children?: ProjectFileNode[];
-};
 
 function FileTreeNode({ node, depth }: { node: ProjectFileNode; depth: number }) {
   const hasChildren = node.type === "directory" && (node.children?.length ?? 0) > 0;
@@ -48,31 +42,15 @@ function FileTreeNode({ node, depth }: { node: ProjectFileNode; depth: number })
 }
 
 export function ProjectFilesSidebar({ projectId }: { projectId: string }) {
-  const [tree, setTree] = useState<ProjectFileNode[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [hasError, setHasError] = useState(false);
+  const cacheEntry = useAppStore((s) => s.projectFilesById[projectId]);
+  const ensureProjectFiles = useAppStore((s) => s.ensureProjectFiles);
+  const tree = cacheEntry?.tree ?? [];
+  const isLoading = !cacheEntry || cacheEntry.status === "loading";
+  const hasError = cacheEntry?.status === "error";
 
   useEffect(() => {
-    const controller = new AbortController();
-
-    fetch(`/api/projects/${projectId}/files?tree=1`, { signal: controller.signal })
-      .then((response) => {
-        if (!response.ok) throw new Error("Failed to load project files");
-        return response.json() as Promise<{ tree?: ProjectFileNode[] }>;
-      })
-      .then((data) => {
-        setTree(data.tree ?? []);
-      })
-      .catch((error: unknown) => {
-        if (error instanceof DOMException && error.name === "AbortError") return;
-        setHasError(true);
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setIsLoading(false);
-      });
-
-    return () => controller.abort();
-  }, [projectId]);
+    void ensureProjectFiles(projectId);
+  }, [cacheEntry, ensureProjectFiles, projectId]);
 
   return (
     <aside className="flex h-full min-w-0 flex-col bg-background">

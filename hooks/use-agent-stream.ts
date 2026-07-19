@@ -39,11 +39,16 @@ function parseSSEChunk(chunk: string): { eventType: string; data: Record<string,
   }
 }
 
+function mayMutateProjectFiles(toolName: string): boolean {
+  return /write|edit|bash|shell|delete|move|rename|copy|mkdir/i.test(toolName);
+}
+
 export function useAgentStream() {
   const applyStreamEvent = useAppStore((s) => s.applyStreamEvent);
   const addMessage = useAppStore((s) => s.addMessage);
   const setIsStreaming = useAppStore((s) => s.setIsStreaming);
   const setCurrentSession = useAppStore((s) => s.setCurrentSession);
+  const invalidateProjectFiles = useAppStore((s) => s.invalidateProjectFiles);
 
   const abortRef = useRef<AbortController | null>(null);
 
@@ -58,6 +63,7 @@ export function useAgentStream() {
         optimisticSessionId,
         onNewSession,
       } = opts;
+      let mayHaveChangedProjectFiles = false;
 
       const userMsgId = uuidv4();
       const assistantMsgId = uuidv4();
@@ -154,6 +160,10 @@ export function useAgentStream() {
 
             applyStreamEvent(streamEvent);
 
+            if (streamEvent.type === "tool_start" && mayMutateProjectFiles(streamEvent.toolName)) {
+              mayHaveChangedProjectFiles = true;
+            }
+
             if (eventType === "error") {
               toast.error((data.message as string) || "AI 响应出错");
             }
@@ -179,10 +189,17 @@ export function useAgentStream() {
           });
         }
       } finally {
+        if (mayHaveChangedProjectFiles) invalidateProjectFiles(projectId);
         abortRef.current = null;
       }
     },
-    [applyStreamEvent, addMessage, setIsStreaming, setCurrentSession]
+    [
+      applyStreamEvent,
+      addMessage,
+      setIsStreaming,
+      setCurrentSession,
+      invalidateProjectFiles,
+    ]
   );
 
   const interrupt = useCallback(() => {

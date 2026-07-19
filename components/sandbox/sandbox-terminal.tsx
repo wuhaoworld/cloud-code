@@ -3,6 +3,7 @@
 import { FormEvent, KeyboardEvent, useCallback, useEffect, useRef, useState } from "react";
 import { CircleStop, Loader2, Play, Power, TerminalSquare, Trash2 } from "lucide-react";
 import { toast } from "sonner";
+import { useAppStore } from "@/store/app-store";
 import { cn } from "@/lib/utils";
 
 type SandboxStatus = "idle" | "starting" | "running" | "snapshotting";
@@ -57,6 +58,7 @@ export function SandboxTerminal({
   const [executionId, setExecutionId] = useState<string | null>(null);
   const outputRef = useRef<HTMLDivElement>(null);
   const requestControllerRef = useRef<AbortController | null>(null);
+  const invalidateProjectFiles = useAppStore((s) => s.invalidateProjectFiles);
 
   const appendEntry = useCallback((kind: TerminalEntryKind, text: string) => {
     if (!text) return;
@@ -195,6 +197,7 @@ export function SandboxTerminal({
         toast.error(message);
       }
     } finally {
+      invalidateProjectFiles(projectId);
       requestControllerRef.current = null;
       setExecutionId(null);
       setIsExecuting(false);

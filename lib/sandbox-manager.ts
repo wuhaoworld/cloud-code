@@ -47,12 +47,10 @@ const serverUrls = new Map<string, string>();
 // Stored alongside serverUrls so the caller can pass it with every /stream and /approve call.
 const serverTokens = new Map<string, string>();
 
-// workspaceId → in-flight bootstrap promise. Without this, concurrent calls
-// to ensureServerRunning() for the same workspace (e.g. two near-simultaneous
-// requests, or multiple serverless instances in production) would each see a
-// cache miss and independently run `npm install` against the same
-// node_modules directory in the sandbox, risking a corrupted/truncated
-// native binary write.
+// workspaceId → in-flight server-readiness promise. This serializes the
+// health check, credential lookup, and any bootstrap as one operation. Without
+// it, two simultaneous requests can both pass their own health checks while one
+// restarts the server and rotates its token, making the other request fail.
 const bootstrapPromises = new Map<string, Promise<{ baseUrl: string; token: string }>>();
 
 // workspaceId → in-flight Sandbox.getOrCreate() promise. Creation (especially
@@ -311,6 +309,21 @@ export class SandboxManager {
     workspaceId: string,
     sandbox: InstanceType<typeof import("@vercel/sandbox").Sandbox>
   ): Promise<{ baseUrl: string; token: string }> {
+    const inFlight = bootstrapPromises.get(workspaceId);
+    if (inFlight) return inFlight;
+
+    const promise = this.ensureServerRunningOnce(workspaceId, sandbox)
+      .finally(() => {
+        bootstrapPromises.delete(workspaceId);
+      });
+    bootstrapPromises.set(workspaceId, promise);
+    return promise;
+  }
+
+  private static async ensureServerRunningOnce(
+    workspaceId: string,
+    sandbox: InstanceType<typeof import("@vercel/sandbox").Sandbox>
+  ): Promise<{ baseUrl: string; token: string }> {
     const cached = serverUrls.get(workspaceId);
     if (cached) {
       // Verify the cached server is still alive — after a sandbox
@@ -355,28 +368,15 @@ export class SandboxManager {
       console.error("Failed to query/ping persisted sandbox server credentials:", err);
     }
 
-    // Deduplicate concurrent bootstrap calls for the same workspace so only
-    // one `npm install` ever runs against the sandbox at a time.
-    const inFlight = bootstrapPromises.get(workspaceId);
-    if (inFlight) return inFlight;
-
-    const promise = bootstrapSandboxServer(sandbox)
-      .then(async ({ baseUrl, token }) => {
-        serverUrls.set(workspaceId, baseUrl);
-        serverTokens.set(workspaceId, token);
-        // Persist the new credentials to the database
-        await db
-          .update(workspaces)
-          .set({ sandboxToken: token, sandboxUrl: baseUrl })
-          .where(eq(workspaces.id, workspaceId));
-        return { baseUrl, token };
-      })
-      .finally(() => {
-        bootstrapPromises.delete(workspaceId);
-      });
-
-    bootstrapPromises.set(workspaceId, promise);
-    return promise;
+    const { baseUrl, token } = await bootstrapSandboxServer(sandbox);
+    serverUrls.set(workspaceId, baseUrl);
+    serverTokens.set(workspaceId, token);
+    // Persist the new credentials to the database
+    await db
+      .update(workspaces)
+      .set({ sandboxToken: token, sandboxUrl: baseUrl })
+      .where(eq(workspaces.id, workspaceId));
+    return { baseUrl, token };
   }
 
   /**

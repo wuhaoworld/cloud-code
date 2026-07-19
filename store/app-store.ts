@@ -36,6 +36,21 @@ export interface ProjectSession {
   createdAt: number;
 }
 
+export interface ProjectFileNode {
+  name: string;
+  path: string;
+  type: "file" | "directory";
+  children?: ProjectFileNode[];
+}
+
+type ProjectFileCacheEntry = {
+  tree: ProjectFileNode[];
+  files: string[];
+  status: "loading" | "ready" | "error";
+};
+
+const projectFileRequests = new Map<string, Promise<void>>();
+
 export interface PermissionRequest {
   requestId: string;
   toolUseId: string;
@@ -62,6 +77,20 @@ function patchLastBlock<T extends Block>(
   return [...blocks.slice(0, -1), fn(last)];
 }
 
+function flattenProjectFileTree(tree: ProjectFileNode[]): string[] {
+  const files: string[] = [];
+
+  const visit = (nodes: ProjectFileNode[]) => {
+    for (const node of nodes) {
+      files.push(node.type === "directory" ? `${node.path}/` : node.path);
+      if (node.children) visit(node.children);
+    }
+  };
+
+  visit(tree);
+  return files;
+}
+
 // ---- Store ----
 
 interface AppState {
@@ -71,6 +100,7 @@ interface AppState {
   projects: Project[];
   expandedProjects: Set<string>;
   currentProjectId: string | null;
+  projectFilesById: Record<string, ProjectFileCacheEntry>;
 
   sessions: Record<string, ProjectSession[]>;
   currentSessionId: string | null;
@@ -99,6 +129,8 @@ interface AppState {
   toggleProjectExpanded: (projectId: string) => void;
   setExpandedProjects: (projectIds: string[]) => void;
   setCurrentProject: (projectId: string | null) => void;
+  ensureProjectFiles: (projectId: string) => Promise<void>;
+  invalidateProjectFiles: (projectId: string) => void;
 
   // Actions — 会话
   setSessions: (projectId: string, sessions: ProjectSession[]) => void;
@@ -127,13 +159,14 @@ interface AppState {
 
 export const useAppStore = create<AppState>()(
   devtools(
-    (set) => ({
+    (set, get) => ({
       workspaces: [],
       currentWorkspaceId: null,
 
       projects: [],
       expandedProjects: new Set(),
       currentProjectId: null,
+      projectFilesById: {},
       sessions: {},
       currentSessionId: null,
       messageIds: [],
@@ -152,6 +185,10 @@ export const useAppStore = create<AppState>()(
           const remaining = state.workspaces.filter((w) => w.id !== workspaceId);
           // Remove projects belonging to this workspace from local state
           const filteredProjects = state.projects.filter((p) => p.workspaceId !== workspaceId);
+          const projectFilesById = { ...state.projectFilesById };
+          for (const project of state.projects) {
+            if (project.workspaceId === workspaceId) delete projectFilesById[project.id];
+          }
           const newCurrentWorkspaceId =
             state.currentWorkspaceId === workspaceId
               ? (remaining[0]?.id ?? null)
@@ -163,6 +200,7 @@ export const useAppStore = create<AppState>()(
             workspaces: remaining,
             currentWorkspaceId: newCurrentWorkspaceId,
             projects: filteredProjects,
+            projectFilesById,
           };
         }),
       updateWorkspace: (workspaceId, data) =>
@@ -196,10 +234,72 @@ export const useAppStore = create<AppState>()(
           projects: state.projects.map((p) => (p.id === id ? { ...p, ...data } : p)),
         })),
       removeProject: (id) =>
+        set((state) => {
+          const projectFilesById = { ...state.projectFilesById };
+          delete projectFilesById[id];
+          return {
+            projects: state.projects.filter((p) => p.id !== id),
+            currentProjectId: state.currentProjectId === id ? null : state.currentProjectId,
+            projectFilesById,
+          };
+        }),
+      ensureProjectFiles: async (projectId) => {
+        const cached = get().projectFilesById[projectId];
+        if (cached?.status === "ready") return;
+
+        const inFlight = projectFileRequests.get(projectId);
+        if (inFlight) return inFlight;
+
         set((state) => ({
-          projects: state.projects.filter((p) => p.id !== id),
-          currentProjectId: state.currentProjectId === id ? null : state.currentProjectId,
-        })),
+          projectFilesById: {
+            ...state.projectFilesById,
+            [projectId]: {
+              tree: cached?.tree ?? [],
+              files: cached?.files ?? [],
+              status: "loading",
+            },
+          },
+        }));
+
+        const request = fetch(`/api/projects/${projectId}/files?tree=1`)
+          .then((response) => {
+            if (!response.ok) throw new Error("Failed to load project files");
+            return response.json() as Promise<{ tree?: ProjectFileNode[] }>;
+          })
+          .then((data) => {
+            const tree = data.tree ?? [];
+            set((state) => ({
+              projectFilesById: {
+                ...state.projectFilesById,
+                [projectId]: { tree, files: flattenProjectFileTree(tree), status: "ready" },
+              },
+            }));
+          })
+          .catch(() => {
+            set((state) => ({
+              projectFilesById: {
+                ...state.projectFilesById,
+                [projectId]: {
+                  tree: cached?.tree ?? [],
+                  files: cached?.files ?? [],
+                  status: "error",
+                },
+              },
+            }));
+          })
+          .finally(() => {
+            projectFileRequests.delete(projectId);
+          });
+
+        projectFileRequests.set(projectId, request);
+        return request;
+      },
+      invalidateProjectFiles: (projectId) =>
+        set((state) => {
+          const projectFilesById = { ...state.projectFilesById };
+          delete projectFilesById[projectId];
+          return { projectFilesById };
+        }),
       toggleProjectExpanded: (projectId) =>
         set((state) => {
           const next = new Set(state.expandedProjects);
