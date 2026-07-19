@@ -228,7 +228,11 @@ export const useAppStore = create<AppState>()(
       // Project actions
       setProjects: (projects) => set({ projects }),
       addProject: (project) =>
-        set((state) => ({ projects: [project, ...state.projects] })),
+        set((state) => {
+          const next = new Set(state.expandedProjects);
+          next.add(project.id);
+          return { projects: [project, ...state.projects], expandedProjects: next };
+        }),
       updateProject: (id, data) =>
         set((state) => ({
           projects: state.projects.map((p) => (p.id === id ? { ...p, ...data } : p)),
