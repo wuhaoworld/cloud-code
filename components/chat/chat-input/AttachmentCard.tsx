@@ -33,6 +33,8 @@ export default function AttachmentCard({ file, previewUrl, onRemove }: Attachmen
       <div className="flex items-center gap-2 h-full px-2.5">
         {/* 左侧：图片缩略图 或 彩色图标 */}
         {file.kind === 'image' && previewUrl ? (
+          // Preview URLs are local data/blob URLs, which Next.js cannot optimize.
+          // eslint-disable-next-line @next/next/no-img-element
           <img
             src={previewUrl}
             alt={file.name}

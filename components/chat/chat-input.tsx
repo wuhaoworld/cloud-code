@@ -26,18 +26,6 @@ import {
   createSkillBadgeDOM,
 } from "./chat-input/fileUtils";
 
-const PERMISSION_MODE_OPTIONS: Array<{
-  value: PermissionMode;
-  label: string;
-  description: string;
-}> = [
-  { value: "default", label: "Ask before edits", description: "标准权限行为" },
-  { value: "acceptEdits", label: "Edit automatically", description: "自动接受文件编辑" },
-  { value: "plan", label: "Plan mode", description: "仅读取工具" },
-  { value: "auto", label: "Auto mode", description: "自动审批工具调用" },
-  { value: "bypassPermissions", label: "Bypass permissions", description: "绕过权限检查" },
-];
-
 // ── Editor Helper ──────────────────────────────────────────────────
 
 function parseEditorContents(editor: HTMLDivElement) {
@@ -159,17 +147,12 @@ export function ChatInput({
       });
   }, []);
 
-  const [permissionMode, setPermissionMode] =
-    useState<PermissionMode>("default");
+  const permissionMode: PermissionMode = "bypassPermissions";
 
   const handleModelChange = (m: ModelOption) => {
     setModel(m);
     localStorage.setItem("selected-model-id", m.id);
   };
-
-  const selectedPermissionMode = PERMISSION_MODE_OPTIONS.find(
-    (option) => option.value === permissionMode,
-  )!;
 
   // ── Editor state ──
   const editorRef = useRef<HTMLDivElement>(null);
@@ -764,7 +747,7 @@ export function ChatInput({
 
           {/* Bottom toolbar */}
           <div className="flex items-center justify-between px-1.5 pb-1.5">
-            {/* Left: add attachment + permission mode */}
+            {/* Left: add attachment */}
             <div className="flex items-center gap-0.5">
               <button
                 title={
@@ -778,41 +761,6 @@ export function ChatInput({
               >
                 <Plus size={14} />
               </button>
-
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    disabled={disabled}
-                    title={selectedPermissionMode.description}
-                    className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-[12.5px] dark:text-white/55 text-black/45 dark:hover:bg-white/[0.06] hover:bg-black/[0.05] dark:hover:text-white/75 hover:text-black/65 transition-all outline-none disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    <span>{selectedPermissionMode.label}</span>
-                    <ChevronDown className="size-3 opacity-60" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start" className="w-[220px] p-1 space-y-0.5">
-                  {PERMISSION_MODE_OPTIONS.map((option) => (
-                    <DropdownMenuItem
-                      key={option.value}
-                      onClick={() => setPermissionMode(option.value)}
-                      className={cn(
-                        "flex items-center justify-between gap-3 px-3 py-2 rounded-lg text-[13px] cursor-default",
-                        option.value === permissionMode && "bg-accent",
-                      )}
-                    >
-                      <span className="flex flex-col gap-0.5">
-                        <span>{option.label}</span>
-                        <span className="text-[11px] text-muted-foreground">
-                          {option.description}
-                        </span>
-                      </span>
-                      {option.value === permissionMode && (
-                        <Check className="size-3.5 shrink-0" />
-                      )}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
             </div>
 
             {/* Right: model selector slot + send/stop */}

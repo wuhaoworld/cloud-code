@@ -57,7 +57,7 @@ export async function POST(req: NextRequest) {
       : undefined;
   const permissionMode = isPermissionMode(body.permissionMode)
     ? body.permissionMode
-    : "default";
+    : "bypassPermissions";
   const userMsgId = body.userMsgId || uuidv4();
 
   if (!projectId || !prompt) {

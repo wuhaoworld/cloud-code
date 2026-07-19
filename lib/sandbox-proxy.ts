@@ -15,7 +15,7 @@
  * non-sandbox stream route emits, keeping the client protocol identical.
  */
 
-import { pendingSandboxApprovals, registerSandboxApproval } from "./sandbox-approvals";
+import { registerSandboxApproval } from "./sandbox-approvals";
 import type { Block } from "@/store/types";
 
 // Re-export so the stream route has a single import point

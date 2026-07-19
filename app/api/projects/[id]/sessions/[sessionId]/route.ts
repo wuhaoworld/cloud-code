@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { db } from "@/db";
-import { projects, projectSessions, chatMessages } from "@/db/schema";
+import { projects, projectSessions } from "@/db/schema";
 import { eq, and } from "drizzle-orm";
 
 // PATCH /api/projects/[id]/sessions/[sessionId] — 重命名或置顶会话

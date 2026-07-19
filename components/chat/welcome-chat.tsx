@@ -61,7 +61,6 @@ export function WelcomeChat({ defaultProjectId }: WelcomeChatProps) {
     _attachments?: import("@/components/chat/chat-input/AttachmentCard").AttachmentFile[],
     _skillIds?: string[] | null,
     permissionMode?: PermissionMode,
-    _model?: string,
   ) => {
     if (!activeProjectId) {
       toast.error("请先选择或创建一个项目");

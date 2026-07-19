@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Eye, EyeOff, Loader2, UserPlus } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 
 import { signUp } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";

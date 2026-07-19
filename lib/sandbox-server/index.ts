@@ -433,7 +433,7 @@ app.post("/stream", async (req: Request, res: Response) => {
     const queryOptions: any = {
       cwd,
       pathToClaudeCodeExecutable: CLAUDE_BIN,
-      permissionMode: permissionMode ?? "default",
+      permissionMode: permissionMode ?? "bypassPermissions",
       enableFileCheckpointing: true,
       includePartialMessages: true,
       // Forward custom Anthropic endpoint / key / model from the process environment
