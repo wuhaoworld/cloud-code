@@ -9,6 +9,7 @@
  */
 
 import express, { Request, Response } from "express";
+import { spawn, type ChildProcess } from "child_process";
 import fs from "fs";
 import path from "path";
 import { v4 as uuidv4 } from "uuid";
@@ -58,7 +59,7 @@ const pendingPermissions = new Map<
   }
 >();
 
-const SANDBOX_SERVER_VERSION = 2;
+const SANDBOX_SERVER_VERSION = 3;
 const WORKSPACE_ROOT = "/workspace";
 const IGNORE_DIRS = new Set([
   "node_modules", ".git", ".next", "dist", "out", "build", ".cache",
@@ -189,6 +190,203 @@ app.post("/approve", (req: Request, res: Response) => {
       : { behavior: "deny", message: message ?? "Permission denied." }
   );
   res.json({ ok: true });
+});
+
+const MAX_TERMINAL_COMMAND_LENGTH = 10_000;
+const MAX_TERMINAL_OUTPUT_BYTES = 1_000_000;
+const TERMINAL_COMMAND_TIMEOUT_MS = 5 * 60 * 1_000;
+
+type TerminalExecution = {
+  child: ChildProcess;
+  startedAt: number;
+  timeout: ReturnType<typeof setTimeout>;
+};
+
+const runningTerminalCommands = new Map<string, TerminalExecution>();
+const runningTerminalProjects = new Map<string, string>();
+
+function getTerminalProjectRoot(projectPath: unknown): string | null {
+  if (typeof projectPath !== "string" || !/^[a-zA-Z0-9_-]+$/.test(projectPath)) {
+    return null;
+  }
+
+  const rootPath = path.resolve(WORKSPACE_ROOT, projectPath);
+  if (path.dirname(rootPath) !== WORKSPACE_ROOT) return null;
+
+  try {
+    const stats = fs.lstatSync(rootPath);
+    return stats.isDirectory() && !stats.isSymbolicLink() ? rootPath : null;
+  } catch {
+    return null;
+  }
+}
+
+function terminateTerminalCommand(executionId: string, signal: NodeJS.Signals = "SIGTERM") {
+  const execution = runningTerminalCommands.get(executionId);
+  if (!execution || execution.child.killed) return false;
+
+  try {
+    // The command runs as its own process group so a cancellation also stops
+    // descendants such as npm, rather than leaving them running in the VM.
+    if (execution.child.pid) {
+      process.kill(-execution.child.pid, signal);
+    } else {
+      execution.child.kill(signal);
+    }
+    return true;
+  } catch {
+    try {
+      execution.child.kill(signal);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+}
+
+// POST /terminal/cancel — terminate an active command for this workspace Sandbox.
+app.post("/terminal/cancel", (req: Request, res: Response) => {
+  const executionId = (req.body as { executionId?: unknown }).executionId;
+  if (typeof executionId !== "string" || !executionId) {
+    res.status(400).json({ error: "executionId is required" });
+    return;
+  }
+
+  if (!runningTerminalCommands.has(executionId)) {
+    res.status(404).json({ error: "Terminal command not found or already completed" });
+    return;
+  }
+
+  terminateTerminalCommand(executionId);
+  res.json({ ok: true });
+});
+
+// POST /terminal/exec — execute one non-interactive shell command and stream output as SSE.
+app.post("/terminal/exec", (req: Request, res: Response) => {
+  const { projectPath, command } = req.body as {
+    projectPath?: unknown;
+    command?: unknown;
+  };
+  const rootPath = typeof projectPath === "string"
+    ? getTerminalProjectRoot(projectPath)
+    : null;
+
+  if (typeof projectPath !== "string" || !rootPath) {
+    res.status(400).json({ error: "Invalid project path" });
+    return;
+  }
+  if (
+    typeof command !== "string" ||
+    !command.trim() ||
+    command.length > MAX_TERMINAL_COMMAND_LENGTH ||
+    command.includes("\0")
+  ) {
+    res.status(400).json({ error: "A valid command up to 10,000 characters is required" });
+    return;
+  }
+  if (runningTerminalProjects.has(projectPath)) {
+    res.status(409).json({ error: "Another terminal command is already running for this project" });
+    return;
+  }
+
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders();
+
+  const executionId = uuidv4();
+  const startedAt = Date.now();
+  let outputBytes = 0;
+  let outputLimited = false;
+  let finished = false;
+
+  const emit = (eventType: string, data: Record<string, unknown>) => {
+    if (!res.writableEnded) {
+      res.write(`event: ${eventType}\ndata: ${JSON.stringify(data)}\n\n`);
+    }
+  };
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    const execution = runningTerminalCommands.get(executionId);
+    if (execution) clearTimeout(execution.timeout);
+    runningTerminalCommands.delete(executionId);
+    runningTerminalProjects.delete(projectPath);
+    if (!res.writableEnded) res.end();
+  };
+  const emitOutput = (eventType: "stdout" | "stderr", chunk: Buffer) => {
+    if (outputLimited) return;
+
+    const remaining = MAX_TERMINAL_OUTPUT_BYTES - outputBytes;
+    if (remaining <= 0) {
+      outputLimited = true;
+      emit("error", { executionId, message: "Command output exceeded the 1 MB limit" });
+      terminateTerminalCommand(executionId);
+      return;
+    }
+
+    const limitedChunk = chunk.byteLength > remaining ? chunk.subarray(0, remaining) : chunk;
+    outputBytes += limitedChunk.byteLength;
+    emit(eventType, { executionId, data: limitedChunk.toString("utf8") });
+
+    if (chunk.byteLength > remaining) {
+      outputLimited = true;
+      emit("error", { executionId, message: "Command output exceeded the 1 MB limit" });
+      terminateTerminalCommand(executionId);
+    }
+  };
+
+  const child = spawn("/bin/bash", ["-lc", command], {
+    cwd: rootPath,
+    detached: true,
+    env: {
+      PATH: process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin",
+      HOME: process.env.HOME ?? "/tmp",
+      LANG: process.env.LANG ?? "C.UTF-8",
+      LC_ALL: process.env.LC_ALL ?? "C.UTF-8",
+      TERM: "dumb",
+      PWD: rootPath,
+      NODE_ENV: process.env.NODE_ENV ?? "production",
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+
+  const timeout = setTimeout(() => {
+    emit("error", { executionId, message: "Command timed out after 5 minutes" });
+    if (terminateTerminalCommand(executionId)) {
+      setTimeout(() => terminateTerminalCommand(executionId, "SIGKILL"), 5_000).unref();
+    }
+  }, TERMINAL_COMMAND_TIMEOUT_MS);
+
+  runningTerminalCommands.set(executionId, { child, startedAt, timeout });
+  runningTerminalProjects.set(projectPath, executionId);
+  emit("started", { executionId, cwd: rootPath });
+
+  child.stdout?.on("data", (chunk: Buffer) => emitOutput("stdout", chunk));
+  child.stderr?.on("data", (chunk: Buffer) => emitOutput("stderr", chunk));
+  child.once("error", (error) => {
+    emit("error", { executionId, message: error.message });
+    finish();
+  });
+  child.once("close", (exitCode, signal) => {
+    const durationMs = Date.now() - (runningTerminalCommands.get(executionId)?.startedAt ?? Date.now());
+    emit("exit", {
+      executionId,
+      exitCode: typeof exitCode === "number" ? exitCode : null,
+      signal: signal ?? null,
+      durationMs,
+    });
+    finish();
+  });
+
+  // Browser aborts and explicit cancellations both close the streaming response.
+  // Stop the process group so it cannot outlive its visible terminal session.
+  res.once("close", () => {
+    if (runningTerminalCommands.has(executionId)) {
+      terminateTerminalCommand(executionId);
+    }
+  });
 });
 
 // POST /stream — SSE response
