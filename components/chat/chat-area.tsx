@@ -364,8 +364,8 @@ export function ChatArea({
         className={cn(
           "absolute top-2 right-3 z-20 rounded-sm p-1.5 transition-colors",
           rightPanelOpen
-            ? "bg-muted text-foreground shadow-sm"
-            : "text-muted-foreground hover:bg-muted hover:text-foreground",
+            ? "bg-muted text-foreground hover:bg-foreground/10 dark:hover:bg-background"
+            : "text-muted-foreground hover:bg-foreground/10 hover:text-foreground dark:hover:bg-background",
         )}
         aria-label={rightPanelOpen ? "隐藏项目文件侧边栏" : "显示项目文件侧边栏"}
         aria-pressed={rightPanelOpen}
@@ -381,7 +381,7 @@ export function ChatArea({
         <ResizablePanel id="chat" minSize="24rem" className="min-w-0">
           <div className="flex h-full min-h-0 min-w-0 flex-col">
             {/* 顶部工具栏 */}
-            <header className="flex shrink-0 items-center gap-1 border-b border-border/60 px-3 py-3 pr-12">
+            <header className="flex h-11 shrink-0 items-center gap-1 border-b border-border/60 px-3 pr-12">
               <button
                 onClick={() => router.push(`${routePrefix}/${projectId}`)}
                 className="truncate rounded-sm px-1.5 py-0.5 text-sm text-foreground transition-colors hover:bg-muted"
